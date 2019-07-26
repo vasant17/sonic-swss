@@ -30,19 +30,27 @@ IntfMgr::IntfMgr(DBConnector *cfgDb, DBConnector *appDb, DBConnector *stateDb, c
 }
 
 void IntfMgr::setIntfIp(const string &alias, const string &opCmd,
-                        const string &ipPrefixStr, const bool ipv4)
+                        const IpPrefix &ipPrefix)
 {
-    stringstream cmd;
-    string res;
+    stringstream    cmd;
+    string          res;
+    string          ipPrefixStr = ipPrefix.to_string();
+    string          broadcastIpStr = ipPrefix.getBroadcastIp().to_string();
+    int             prefixLen = ipPrefix.getMaskLength();
 
-    if (ipv4)
+    if (ipPrefix.isV4())
     {
-        cmd << IP_CMD << " address " << opCmd << " " << ipPrefixStr << " dev " << alias;
+        (prefixLen < 31) ?
+        (cmd << IP_CMD << " address " << opCmd << " " << ipPrefixStr << " broadcast " << broadcastIpStr <<" dev " << alias) :
+        (cmd << IP_CMD << " address " << opCmd << " " << ipPrefixStr << " dev " << alias);
     }
     else
     {
-        cmd << IP_CMD << " -6 address " << opCmd << " " << ipPrefixStr << " dev " << alias;
+        (prefixLen < 127) ?
+        (cmd << IP_CMD << " -6 address " << opCmd << " " << ipPrefixStr << " broadcast " << broadcastIpStr << " dev " << alias) :
+        (cmd << IP_CMD << " -6 address " << opCmd << " " << ipPrefixStr << " dev " << alias);
     }
+
     int ret = swss::exec(cmd.str(), res);
     if (ret)
     {
@@ -183,7 +191,7 @@ bool IntfMgr::doIntfAddrTask(const vector<string>& keys,
     SWSS_LOG_ENTER();
 
     string alias(keys[0]);
-    IpPrefix ip_prefix(keys[1]);
+    IpPrefix ipPrefix(keys[1]);
     bool is_lo = !alias.compare(0, strlen(LOOPBACK_PREFIX), LOOPBACK_PREFIX);
     string appKey = (is_lo ? "lo" : keys[0]) + ":" + keys[1];
 
@@ -202,11 +210,11 @@ bool IntfMgr::doIntfAddrTask(const vector<string>& keys,
         // Set Interface IP except for lo
         if (!is_lo)
         {
-            setIntfIp(alias, "add", ip_prefix.to_string(), ip_prefix.isV4());
+            setIntfIp(alias, "add", ipPrefix);
         }
 
         std::vector<FieldValueTuple> fvVector;
-        FieldValueTuple f("family", ip_prefix.isV4() ? IPV4_NAME : IPV6_NAME);
+        FieldValueTuple f("family", ipPrefix.isV4() ? IPV4_NAME : IPV6_NAME);
         FieldValueTuple s("scope", "global");
         fvVector.push_back(s);
         fvVector.push_back(f);
@@ -219,7 +227,7 @@ bool IntfMgr::doIntfAddrTask(const vector<string>& keys,
         // Set Interface IP except for lo
         if (!is_lo)
         {
-            setIntfIp(alias, "del", ip_prefix.to_string(), ip_prefix.isV4());
+            setIntfIp(alias, "del", ipPrefix);
         }
         m_appIntfTableProducer.del(appKey);
         m_stateIntfTable.del(keys[0] + state_db_key_delimiter + keys[1]);
