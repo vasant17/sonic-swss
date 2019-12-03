@@ -2292,9 +2292,14 @@ void PortsOrch::doVlanMemberTask(Consumer &consumer)
             }
 
             if (addBridgePort(port) && addVlanMember(vlan, port, tagging_mode))
+            {
+                m_portList[port.m_alias].set_dependency(Port::VLAN_DEP);
                 it = consumer.m_toSync.erase(it);
+            }
             else
+            {
                 it++;
+            }
         }
         else if (op == DEL_COMMAND)
         {
@@ -2305,6 +2310,8 @@ void PortsOrch::doVlanMemberTask(Consumer &consumer)
                     if (port.m_vlan_members.empty())
                     {
                         removeBridgePort(port);
+                      
+                        m_portList[port.m_alias].clear_dependency(Port::VLAN_DEP);
                     }
                     it = consumer.m_toSync.erase(it);
                 }
@@ -2323,6 +2330,7 @@ void PortsOrch::doVlanMemberTask(Consumer &consumer)
             it = consumer.m_toSync.erase(it);
         }
     }
+    
 }
 
 void PortsOrch::doLagTask(Consumer &consumer)
