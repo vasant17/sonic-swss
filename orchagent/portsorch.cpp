@@ -2110,7 +2110,14 @@ void PortsOrch::doPortTask(Consumer &consumer)
         }
         else
         {
-            SWSS_LOG_ERROR("Unknown operation type %s", op.c_str());
+            if (m_portList[alias].has_dependency())
+            {
+                // Port has one or more dependencies, cannot remove
+                SWSS_LOG_WARN("Please remove port dependenc(y/ies):%s",
+                               m_portList[alias].print_dependency().c_str());
+                it++;
+                continue;
+            }
         }
 
         it = consumer.m_toSync.erase(it);
@@ -2430,6 +2437,15 @@ void PortsOrch::doLagTask(Consumer &consumer)
             if (!getPort(alias, lag))
             {
                 it = consumer.m_toSync.erase(it);
+                continue;
+            }
+
+            if (m_portList[alias].has_dependency())
+            {
+                // LAG has one or more dependencies, cannot remove
+                SWSS_LOG_WARN("Please remove LAG dependenc(y/ies):%s",
+                               m_portList[alias].print_dependency().c_str());
+                it++;
                 continue;
             }
 

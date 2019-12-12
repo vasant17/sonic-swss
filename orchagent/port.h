@@ -48,6 +48,24 @@ public:
         UNKNOWN
     } ;
 
+    enum Dependency {
+        ACL_DEP,
+        FDB_DEP,
+        INTF_DEP,
+        LAG_DEP,
+        VLAN_DEP,
+        MAX_DEP
+    };
+
+    std::unordered_map<Dependency, std::string>
+    m_dependency_string = {
+        {ACL_DEP, "ACL"},
+        {FDB_DEP, "FDB"},
+        {INTF_DEP, "INTF"},
+        {LAG_DEP, "LAG"},
+        {VLAN_DEP, "VLAN"}
+    };
+
     Port() {};
     Port(std::string alias, Type type) :
             m_alias(alias), m_type(type) {};
@@ -65,6 +83,38 @@ public:
     inline bool operator!=(const Port &o) const
     {
         return !(*this == o);
+    }
+
+    inline void set_dependency(Dependency dep)
+    {
+        m_dependency_bitmap |= (1 << dep);
+    }
+
+    inline void clear_dependency(Dependency dep)
+    {
+        m_dependency_bitmap &= ~(1 << dep);
+    }
+
+    inline bool has_dependency()
+    {
+        return (m_dependency_bitmap != 0);
+    }
+
+    std::string print_dependency()
+    {
+        std::string deps="";
+        uint32_t dep_bitmap = m_dependency_bitmap;
+
+        for (int dep = ACL_DEP; dep < MAX_DEP && dep_bitmap; ++dep)
+        {
+            uint32_t mask = (1 << dep);
+
+            if (dep_bitmap & mask) {
+                deps += m_dependency_string[static_cast<Dependency>(dep)] + " ";
+                dep_bitmap &= ~mask;
+            }
+        }
+        return deps;
     }
 
     std::string         m_alias;
@@ -89,6 +139,7 @@ public:
     sai_object_id_t     m_egress_acl_table_group_id = 0;
     vlan_members_t      m_vlan_members;
     sai_object_id_t     m_parent_port_id = 0;
+    uint32_t            m_dependency_bitmap = 0;
     sai_port_oper_status_t m_oper_status = SAI_PORT_OPER_STATUS_UNKNOWN;
     std::set<std::string> m_members;
     std::set<std::string> m_child_ports;
