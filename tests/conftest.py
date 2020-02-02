@@ -845,7 +845,7 @@ class DockerVirtualSwitch(object):
     def update_acl_table(self, table, fvs):
         tbl = swsscommon.Table(self.cdb, "ACL_TABLE")
         tbl.set(table, fvs)
-        time.sleep(1) 
+        time.sleep(1)
 
     def get_acl_table_ids(self):
         tbl = swsscommon.Table(self.adb, "ASIC_STATE:SAI_OBJECT_TYPE_ACL_TABLE")
@@ -869,25 +869,6 @@ class DockerVirtualSwitch(object):
             return True
 
         return False
-
-    def clean_up_left_over(self):
-        atbl = swsscommon.Table(self.adb, "ASIC_STATE:SAI_OBJECT_TYPE_ACL_TABLE_GROUP")
-        keys = atbl.getKeys()
-        for key in keys:
-            atbl._del(key)
-
-        atbl = swsscommon.Table(self.adb, "ASIC_STATE:SAI_OBJECT_TYPE_ACL_TABLE_GROUP")
-        keys = atbl.getKeys()
-        assert len(keys) == 0
-
-        atbl = swsscommon.Table(self.adb, "ASIC_STATE:SAI_OBJECT_TYPE_ACL_TABLE_GROUP_MEMBER")
-        keys = atbl.getKeys()
-        for key in keys:
-            atbl._del(key)
-
-        atbl = swsscommon.Table(self.adb, "ASIC_STATE:SAI_OBJECT_TYPE_ACL_TABLE_GROUP_MEMBER")
-        keys = atbl.getKeys()
-        assert len(keys) == 0
 
     def verify_acl_group_num(self, expt):
         atbl = swsscommon.Table(self.adb, "ASIC_STATE:SAI_OBJECT_TYPE_ACL_TABLE_GROUP")

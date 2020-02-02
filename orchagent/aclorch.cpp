@@ -1327,7 +1327,7 @@ bool AclTable::create()
         table_attrs.push_back(attr);
 
         attr.id = SAI_ACL_TABLE_ATTR_ACL_STAGE;
-        attr.value.s32 = (stage == ACL_STAGE_INGRESS) ? 
+        attr.value.s32 = (stage == ACL_STAGE_INGRESS) ?
                          SAI_ACL_STAGE_INGRESS : SAI_ACL_STAGE_EGRESS;
         table_attrs.push_back(attr);
 
@@ -1548,7 +1548,6 @@ void AclTable::update(SubjectType type, void *cntx)
     }
     else
     {
-        // TODO: deal with port removal scenario
         if (portSet.find(port.m_alias) != portSet.end())
         {
             unbind(bind_port_id);
@@ -1573,10 +1572,10 @@ bool AclTable::bind(sai_object_id_t portOid)
     sai_object_id_t group_member_oid;
     if (!gPortsOrch->bindAclTable(portOid, m_oid, group_member_oid, stage))
     {
-        SWSS_LOG_NOTICE("Failed to bind port oid: %" PRIx64 "", portOid);
+        SWSS_LOG_ERROR("Failed to bind port oid: %" PRIx64 "", portOid);
         return false;
     }
-    SWSS_LOG_NOTICE("Successfully bound port oid: %" PRIx64", group member oid:%" PRIx64 "", 
+    SWSS_LOG_NOTICE("Successfully bound port oid: %" PRIx64", group member oid:%" PRIx64 "",
                      portOid, group_member_oid);
     ports[portOid] = group_member_oid;
     return true;
@@ -1593,7 +1592,7 @@ bool AclTable::unbind(sai_object_id_t portOid)
     {
         return false;
     }
-    SWSS_LOG_NOTICE("%" PRIx64" port is unbound from %s ACL table", 
+    SWSS_LOG_NOTICE("%" PRIx64" port is unbound from %s ACL table",
                     portOid, id.c_str());
     ports[portOid] = SAI_NULL_OBJECT_ID;
     return true;
@@ -2565,10 +2564,11 @@ void AclOrch::getAddDeletePorts(AclTable    &newT,
         curPortSet.insert(p);
     }
 
-    // Get the difference newPortSet-curPortSet and curPortSet-newPortsSet
+    // Get all the ports to be added
     std::set_difference(newPortSet.begin(), newPortSet.end(),
                         curPortSet.begin(), curPortSet.end(),
                         std::inserter(addSet, addSet.end()));
+    // Get all the ports to be deleted
     std::set_difference(curPortSet.begin(), curPortSet.end(),
                         newPortSet.begin(), newPortSet.end(),
                         std::inserter(delSet, delSet.end()));
@@ -2592,7 +2592,8 @@ bool AclOrch::updateAclTablePorts(AclTable &newTable, AclTable &curTable)
         {
             SWSS_LOG_NOTICE("Removed:%s from pendingPortSet", p.c_str());
             curTable.pendingPortSet.erase(p);
-        } else if (curTable.portSet.find(p) != curTable.portSet.end())
+        }
+        else if (curTable.portSet.find(p) != curTable.portSet.end())
         {
             gPortsOrch->getAclBindPortId(p, port_oid);
             assert(port_oid != SAI_NULL_OBJECT_ID);
@@ -2945,19 +2946,21 @@ void AclOrch::doAclTableTask(Consumer &consumer)
                     !isAclTableStageUpdated(newTable.stage,
                                             m_AclTables[table_oid]))
                 {
-                    // Update the table existing table using the info in newTable
+                    // Update the existing table using the info in newTable
                     if (updateAclTable(m_AclTables[table_oid], newTable))
                     {
                         SWSS_LOG_NOTICE("Successfully updated existing ACL table %s",
                                         table_id.c_str());
                         it = consumer.m_toSync.erase(it);
-                    } else
+                    }
+                    else
                     {
                         SWSS_LOG_ERROR("Failed to update existing ACL table %s",
                                         table_id.c_str());
                         it++;
                     }
-                } else
+                }
+                else
                 {
                     if (addAclTable(newTable))
                         it = consumer.m_toSync.erase(it);
@@ -3124,7 +3127,7 @@ bool AclOrch::processAclTablePorts(string portList, AclTable &aclTable)
         {
             SWSS_LOG_ERROR("Failed to get port %s bind port ID for ACL table %s",
                     alias.c_str(), aclTable.id.c_str());
-            return false; 
+            return false;
         }
 
         aclTable.link(bind_port_id);
@@ -3138,6 +3141,7 @@ bool AclOrch::isAclTableTypeUpdated(acl_table_type_t table_type, AclTable &t)
 {
     return (table_type != t.type);
 }
+
 bool AclOrch::processAclTableType(string type, acl_table_type_t &table_type)
 {
     SWSS_LOG_ENTER();
@@ -3169,6 +3173,7 @@ bool AclOrch::isAclTableStageUpdated(acl_stage_type_t acl_stage, AclTable &t)
 {
     return (acl_stage != t.stage);
 }
+
 bool AclOrch::processAclTableStage(string stage, acl_stage_type_t &acl_stage)
 {
     SWSS_LOG_ENTER();

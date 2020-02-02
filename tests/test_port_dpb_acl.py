@@ -25,7 +25,7 @@ class TestPortDPBAcl(object):
         assert len(acl_table_ids) == 1
         dvs.verify_acl_group_num(0)
         acl_group_ids = dvs.get_acl_group_ids()
-        assert len(acl_group_ids) == 0 
+        assert len(acl_group_ids) == 0
 
         bind_ports = ["Ethernet0"]
         fvs = swsscommon.FieldValuePairs([("ports", ",".join(bind_ports))])
@@ -35,7 +35,7 @@ class TestPortDPBAcl(object):
         assert len(acl_table_ids) == 1
         dvs.verify_acl_group_num(1)
         acl_group_ids = dvs.get_acl_group_ids()
-        assert len(acl_group_ids) == 1 
+        assert len(acl_group_ids) == 1
         dvs.verify_acl_group_member(acl_group_ids[0], acl_table_ids[0])
         dvs.verify_acl_port_binding(bind_ports)
 
@@ -47,7 +47,7 @@ class TestPortDPBAcl(object):
         assert len(acl_table_ids) == 1
         dvs.verify_acl_group_num(0)
         acl_group_ids = dvs.get_acl_group_ids()
-        assert len(acl_group_ids) == 0 
+        assert len(acl_group_ids) == 0
 
     '''
     @pytest.mark.skip()
@@ -166,4 +166,4 @@ class TestPortDPBAcl(object):
     @pytest.mark.skip()
     def test_one_port_many_acl_tables(self, dvs):
         #TBD
-        return 
+        return

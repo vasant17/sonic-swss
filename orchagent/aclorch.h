@@ -389,8 +389,13 @@ public:
 class AclOrch : public Orch, public Observer
 {
 public:
-    AclOrch(vector<TableConnector>& connectors, TableConnector switchTable,
-            PortsOrch *portOrch, MirrorOrch *mirrorOrch, NeighOrch *neighOrch, RouteOrch *routeOrch, DTelOrch *m_dTelOrch = NULL);
+    AclOrch(vector<TableConnector>& connectors,
+            TableConnector          switchTable,
+            PortsOrch               *portOrch,
+            MirrorOrch              *mirrorOrch,
+            NeighOrch               *neighOrch,
+            RouteOrch               *routeOrch,
+            DTelOrch                *m_dTelOrch = NULL);
     ~AclOrch();
     void update(SubjectType, void *);
 
@@ -456,9 +461,9 @@ private:
     bool validateAclTable(AclTable &aclTable);
     bool updateAclTablePorts(AclTable &newTable, AclTable &curTable);
     void getAddDeletePorts(AclTable    &newT,
-		           AclTable    &curT,
-			   set<string> &addSet,
-			   set<string> &delSet);
+                           AclTable    &curT,
+                           set<string> &addSet,
+                           set<string> &delSet);
     sai_status_t createDTelWatchListTables();
     sai_status_t deleteDTelWatchListTables();
 

@@ -874,13 +874,13 @@ bool PortsOrch::setPortPfcAsym(Port &port, string pfc_asym)
  *
  * Description:
  *     To bind a port to ACL table we need to do two things.
- *     1. Create ACL table member, which maps 
+ *     1. Create ACL table member, which maps
  *        ACL table group OID --> ACL table OID
  *     2. Set ACL table group OID as value port attribute.
  *
  *      This function performs the second step of binding.
  *
- *      Also, while unbinding we use this function to 
+ *      Also, while unbinding we use this function to
  *      set port attribute value to SAI_NULL_OBJECT_ID
  *
  *      Port attribute name is derived from port type
@@ -959,10 +959,10 @@ bool PortsOrch::unbindRemoveAclTableGroup(sai_object_id_t  port_oid,
     }
 
 
-    sai_object_id_t &group_oid_ref = 
+    sai_object_id_t &group_oid_ref =
             ingress? port.m_ingress_acl_table_group_id :
                      port.m_egress_acl_table_group_id;
-    unordered_set<sai_object_id_t> &acl_list_ref = 
+    unordered_set<sai_object_id_t> &acl_list_ref =
             ingress ? port.m_ingress_acl_tables_uset :
                       port.m_egress_acl_tables_uset;
 
@@ -973,7 +973,7 @@ bool PortsOrch::unbindRemoveAclTableGroup(sai_object_id_t  port_oid,
     }
     assert(acl_list_ref.find(acl_table_oid) != acl_list_ref.end());
     acl_list_ref.erase(acl_table_oid);
-    if (!acl_list_ref.empty()) 
+    if (!acl_list_ref.empty())
     {
         // This port is in more than one acl table's port list
         // So, we need to preserve group OID
@@ -983,11 +983,12 @@ bool PortsOrch::unbindRemoveAclTableGroup(sai_object_id_t  port_oid,
     }
 
     port.clear_dependency(Port::ACL_DEP);
-    SWSS_LOG_NOTICE("Removing port OID %" PRIx64" ACL table grop ID", port_oid);
+    SWSS_LOG_NOTICE("Removing port OID %" PRIx64" ACL table group ID", port_oid);
 
     // Unbind ACL group
     if (!bindUnbindAclTableGroup(port, ingress, false))
     {
+        SWSS_LOG_ERROR("Failed to remove ACL group ID from port");
         return false;
     }
 
@@ -1004,7 +1005,7 @@ bool PortsOrch::unbindRemoveAclTableGroup(sai_object_id_t  port_oid,
         SWSS_LOG_ERROR("Unknown SAI ACL bind point type");
         return false;
     }
-    gCrmOrch->decCrmAclUsedCounter(CrmResourceType::CRM_ACL_GROUP, 
+    gCrmOrch->decCrmAclUsedCounter(CrmResourceType::CRM_ACL_GROUP,
                                    ingress ? SAI_ACL_STAGE_INGRESS : SAI_ACL_STAGE_EGRESS,
                                    bind_type, group_oid_ref);
 
@@ -1013,9 +1014,9 @@ bool PortsOrch::unbindRemoveAclTableGroup(sai_object_id_t  port_oid,
     return true;
 }
 
-bool PortsOrch::createBindAclTableGroup(sai_object_id_t  port_oid, 
-                                        sai_object_id_t  acl_table_oid, 
-                                        sai_object_id_t  &group_oid, 
+bool PortsOrch::createBindAclTableGroup(sai_object_id_t  port_oid,
+                                        sai_object_id_t  acl_table_oid,
+                                        sai_object_id_t  &group_oid,
                                         acl_stage_type_t acl_stage)
 {
     SWSS_LOG_ENTER();
@@ -1029,7 +1030,7 @@ bool PortsOrch::createBindAclTableGroup(sai_object_id_t  port_oid,
 
     sai_status_t    status;
     Port            port;
-    bool            ingress = (ACL_STAGE_INGRESS == acl_stage) ? 
+    bool            ingress = (ACL_STAGE_INGRESS == acl_stage) ?
                               true : false;
     if (!getPort(port_oid, port))
     {
@@ -1037,14 +1038,14 @@ bool PortsOrch::createBindAclTableGroup(sai_object_id_t  port_oid,
         return false;
     }
 
-    unordered_set<sai_object_id_t> &acl_list_ref = 
+    unordered_set<sai_object_id_t> &acl_list_ref =
             ingress ? port.m_ingress_acl_tables_uset :
                       port.m_egress_acl_tables_uset;
-    sai_object_id_t &group_oid_ref = 
+    sai_object_id_t &group_oid_ref =
             ingress ? port.m_ingress_acl_table_group_id :
                       port.m_egress_acl_table_group_id;
-                            
-    if (acl_list_ref.empty()) 
+
+    if (acl_list_ref.empty())
     {
         // Port ACL table group does not exist, create one
         assert(group_oid_ref == SAI_NULL_OBJECT_ID);
@@ -1084,7 +1085,7 @@ bool PortsOrch::createBindAclTableGroup(sai_object_id_t  port_oid,
         assert(group_oid_ref != SAI_NULL_OBJECT_ID);
 
         gCrmOrch->incCrmAclUsedCounter(CrmResourceType::CRM_ACL_GROUP,
-                        ingress ? SAI_ACL_STAGE_INGRESS : 
+                        ingress ? SAI_ACL_STAGE_INGRESS :
                                   SAI_ACL_STAGE_EGRESS, bind_type);
 
         // Bind ACL table group
@@ -1095,7 +1096,7 @@ bool PortsOrch::createBindAclTableGroup(sai_object_id_t  port_oid,
 
         port.set_dependency(Port::ACL_DEP);
 
-        SWSS_LOG_NOTICE("Create %s ACL table group and bind port %s to it", 
+        SWSS_LOG_NOTICE("Create %s ACL table group and bind port %s to it",
                         ingress ? "ingress" : "egress", port.m_alias.c_str());
     }
 
@@ -1126,7 +1127,11 @@ bool PortsOrch::unbindAclTable(sai_object_id_t  port_oid,
                        acl_group_member_oid);
         return false;
     }
-    unbindRemoveAclTableGroup(port_oid, acl_table_oid, acl_stage);
+
+    if (!unbindRemoveAclTableGroup(port_oid, acl_table_oid, acl_stage)) {
+        return false;
+    }
+
     return true;
 }
 
@@ -2263,7 +2268,7 @@ void PortsOrch::doPortTask(Consumer &consumer)
             if (m_portList[alias].has_dependency())
             {
                 // Port has one or more dependencies, cannot remove
-                SWSS_LOG_WARN("Cannot to remove port because of dependency"); 
+                SWSS_LOG_WARN("Cannot to remove port because of dependency");
                 continue;
             }
 
@@ -2614,7 +2619,7 @@ void PortsOrch::doLagTask(Consumer &consumer)
             if (m_portList[alias].has_dependency())
             {
                 // LAG has one or more dependencies, cannot remove
-                SWSS_LOG_WARN("Cannot to remove LAG because of dependency"); 
+                SWSS_LOG_WARN("Cannot to remove LAG because of dependency");
                 continue;
             }
 
@@ -3889,7 +3894,7 @@ bool PortsOrch::getSaiAclBindPointType(Port::Type           type,
             return false;
     }
     return true;
-}        
+}
 
 bool PortsOrch::removeAclTableGroup(const Port &p)
 {
