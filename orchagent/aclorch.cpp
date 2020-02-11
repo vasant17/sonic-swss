@@ -2624,6 +2624,8 @@ bool AclOrch::updateAclTablePorts(AclTable &newTable, AclTable &curTable)
 
         if (!gPortsOrch->getAclBindPortId(p, port_oid))
         {
+            // We do NOT expect this to happen at all.
+            // If at all happens, lets catch it here!
             throw runtime_error("updateAclTablePorts: Couldn't find portOID");
         }
 
