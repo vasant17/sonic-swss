@@ -8,16 +8,17 @@ import json
 import re
 from port_dpb import DPB
 
+speed100G = 100000
+speed50G = 50000
+speed40G = 40000
+speed25G = 25000
+speed10G = 10000
+maxPorts = 128
+maxRootPorts = 32
+maxBreakOut = 4
+
 @pytest.mark.usefixtures('dpb_setup_fixture')
 class TestPortDPB(object):
-    speed100G = 100000
-    speed50G = 50000
-    speed40G = 40000
-    speed25G = 25000
-    speed10G = 10000
-    maxPorts = 128
-    maxRootPorts = 32
-    maxBreakOut = 4
 
     '''
     |--------------------------------------------------
@@ -54,7 +55,7 @@ class TestPortDPB(object):
         #print "**** 4X10G --> 1X40G passed ****"
         dpb.change_speed_and_verify(dvs, ["Ethernet0"], speed100G)
         #print "**** 1X40G --> 1X100G passed ****"
-        dpb.breakout(dvs, "Ethernet0", maxBreakout)
+        dpb.breakout(dvs, "Ethernet0", maxBreakOut)
         #print "**** 1X100G --> 4X25G passed ****"
         dpb.change_speed_and_verify(dvs, ["Ethernet0", "Ethernet1", "Ethernet2", "Ethernet3"], speed10G)
         #print "**** 4X25G --> 4X10G passed ****"
@@ -76,7 +77,7 @@ class TestPortDPB(object):
         dpb = DPB()
         port_names = ["Ethernet0", "Ethernet12", "Ethernet64", "Ethernet112"]
         for pname in port_names:
-            dpb.breakout(dvs, pname, maxbreakout)
+            dpb.breakout(dvs, pname, maxBreakOut)
         dpb.breakin(dvs, ["Ethernet0", "Ethernet1", "Ethernet2", "Ethernet3"])
         dpb.breakin(dvs, ["Ethernet12", "Ethernet13", "Ethernet14", "Ethernet15"])
         dpb.breakin(dvs, ["Ethernet64", "Ethernet65", "Ethernet66", "Ethernet67"])
@@ -100,5 +101,5 @@ class TestPortDPB(object):
 
         for i in range(32):
             start = i*maxBreakOut
-            end = start+maxBreakout
+            end = start+maxBreakOut
             dpb.breakin(dvs, child_port_names[start:end])
