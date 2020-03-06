@@ -3424,9 +3424,6 @@ bool PortsOrch::removeLag(Port lag)
         return false;
     }
 
-    PortUpdate update = { lag, false };
-    notify(SUBJECT_TYPE_PORT_CHANGE, static_cast<void *>(&update));
-
     sai_status_t status = sai_lag_api->remove_lag(lag.m_lag_id);
     if (status != SAI_STATUS_SUCCESS)
     {
