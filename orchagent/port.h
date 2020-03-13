@@ -49,14 +49,6 @@ public:
         UNKNOWN
     } ;
 
-    enum Dependency {
-            ACL_DEP,
-            FDB_DEP,
-            INTF_DEP,
-            LAG_DEP,
-            VLAN_DEP
-    };
-
     Port() {};
     Port(std::string alias, Type type) :
             m_alias(alias), m_type(type) {};
@@ -121,19 +113,6 @@ public:
 
     std::unordered_set<sai_object_id_t> m_ingress_acl_tables_uset;
     std::unordered_set<sai_object_id_t> m_egress_acl_tables_uset;
-
-    inline void set_dependency(Dependency dep)
-    {
-        m_dependency_bitmap |= (1 << dep);
-    }
-    inline void clear_dependency(Dependency dep)
-    {
-        m_dependency_bitmap &= ~(1 << dep);
-    }
-    inline bool has_dependency()
-    {
-        return (m_dependency_bitmap != 0);
-    }
 };
 
 }

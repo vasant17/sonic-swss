@@ -982,7 +982,6 @@ bool PortsOrch::unbindRemoveAclTableGroup(sai_object_id_t  port_oid,
         return true;
     }
 
-    port.clear_dependency(Port::ACL_DEP);
     SWSS_LOG_NOTICE("Removing port OID %" PRIx64" ACL table group ID", port_oid);
 
     // Unbind ACL group
@@ -1093,8 +1092,6 @@ bool PortsOrch::createBindAclTableGroup(sai_object_id_t  port_oid,
         {
             return false;
         }
-
-        port.set_dependency(Port::ACL_DEP);
 
         SWSS_LOG_NOTICE("Create %s ACL table group and bind port %s to it",
                         ingress ? "ingress" : "egress", port.m_alias.c_str());
@@ -1566,25 +1563,20 @@ bool PortsOrch::addPort(const set<int> &lane_set, uint32_t speed, int an, string
     return true;
 }
 
-bool PortsOrch::removePort(sai_object_id_t port_id)
+sai_status_t PortsOrch::removePort(sai_object_id_t port_id)
 {
     SWSS_LOG_ENTER();
 
     sai_status_t status = sai_port_api->remove_port(port_id);
     if (status != SAI_STATUS_SUCCESS)
     {
-        if (status != SAI_STATUS_OBJECT_IN_USE)
-        {
-            SWSS_LOG_ERROR("Failed to remove port %" PRIx64 ", rv:%d", port_id, status);
-            throw runtime_error("Delete port failed");
-        }
-        return false;
+        return status; 
     }
 
     m_portCount--;
     SWSS_LOG_NOTICE("Remove port %" PRIx64, port_id);
 
-    return true;
+    return status;
 }
 
 string PortsOrch::getQueueWatermarkFlexCounterTableKey(string key)
@@ -1940,7 +1932,7 @@ void PortsOrch::doPortTask(Consumer &consumer)
                 {
                     if (m_lanesAliasSpeedMap.find(it->first) == m_lanesAliasSpeedMap.end())
                     {
-                        if (!removePort(it->second))
+                        if (SAI_STATUS_SUCCESS != removePort(it->second))
                         {
                             throw runtime_error("PortsOrch initialization failure.");
                         }
@@ -2269,7 +2261,7 @@ void PortsOrch::doPortTask(Consumer &consumer)
                 // port is part of at-least one VLAN. 
                 // Ideally this should be tracked by SAI redis. 
                 // Until then, let this snippet be here.
-                SWSS_LOG_NOTICE("Cannot remove port as brodge port OID is present %lx", bridge_port_oid);
+                SWSS_LOG_WARN("Cannot remove port as bridge port OID is present %lx", bridge_port_oid);
                 it++;
                 continue;
             } 
@@ -2293,8 +2285,14 @@ void PortsOrch::doPortTask(Consumer &consumer)
                 }
             }
 
-            if (!removePort(port_id))
+            sai_status_t status = removePort(port_id);
+            if (SAI_STATUS_SUCCESS != status)
             {
+                if (SAI_STATUS_OBJECT_IN_USE != status)
+                {
+                    throw runtime_error("Delete port failed");
+                }
+                SWSS_LOG_WARN("Failed to remove port %" PRIx64 ", as the object is in use", port_id);
                 it++;
                 continue;
             }
@@ -2626,13 +2624,6 @@ void PortsOrch::doLagTask(Consumer &consumer)
             if (!getPort(alias, lag))
             {
                 it = consumer.m_toSync.erase(it);
-                continue;
-            }
-
-            if (m_portList[alias].has_dependency())
-            {
-                // LAG has one or more dependencies, cannot remove
-                SWSS_LOG_WARN("Cannot to remove LAG because of dependency");
                 continue;
             }
 
