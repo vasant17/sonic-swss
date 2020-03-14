@@ -1667,6 +1667,7 @@ void PortsOrch::deInitPort(string alias, sai_object_id_t port_id)
     RedisClient redisClient(m_counter_db.get());
     redisClient.hdel(COUNTERS_PORT_NAME_MAP, alias);
 
+    m_portList[alias].m_init = false;
     SWSS_LOG_NOTICE("De-Initialized port %s", alias.c_str());
 }
 
@@ -2275,7 +2276,6 @@ void PortsOrch::doPortTask(Consumer &consumer)
                 {
                     throw runtime_error("Remove hostif for the port failed");
                 }
-                m_portList[alias].m_init = false;
 
                 Port p;
                 if (getPort(port_id, p))
