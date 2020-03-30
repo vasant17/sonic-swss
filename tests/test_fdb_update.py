@@ -7,8 +7,6 @@ import pytest
 from swsscommon import swsscommon
 from distutils.version import StrictVersion
 
-<<<<<<< HEAD
-
 class TestFdbUpdate(object):
     def create_entry(self, tbl, key, pairs):
         fvs = swsscommon.FieldValuePairs(pairs)
