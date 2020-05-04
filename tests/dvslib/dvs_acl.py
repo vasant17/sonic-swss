@@ -1,6 +1,3 @@
-import time
-from swsscommon import swsscommon
-
 class DVSAcl(object):
     def __init__(self, adb, cdb, sdb, cntrdb):
         self.asic_db = adb
@@ -47,7 +44,7 @@ class DVSAcl(object):
         acl_tables = self.get_acl_table_ids()
         return acl_tables[0]
 
-    def verify_acl_tables(self, expt):
+    def verify_acl_table_count(self, expt):
         num_keys = len(self.asic_db.default_acl_tables) + expt
         keys = self.asic_db.wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_ACL_TABLE", num_keys)
         for k in self.asic_db.default_acl_tables:
@@ -56,11 +53,6 @@ class DVSAcl(object):
         acl_tables = [k for k in keys if k not in self.asic_db.default_acl_tables]
 
         assert len(acl_tables) == expt
-
-    def verify_no_acl_tables(self):
-        num_keys = len(self.asic_db.default_acl_tables)
-        keys = self.asic_db.wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_ACL_TABLE", num_keys)
-        assert set(keys) == set(self.asic_db.default_acl_tables)
 
     def verify_acl_group_num(self, expt):
         acl_table_groups = self.get_acl_table_group_ids(expt)

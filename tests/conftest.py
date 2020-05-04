@@ -989,7 +989,6 @@ class DockerVirtualSwitch(object):
                                           self.get_counters_db())
         return self.dvs_acl
 
-
 @pytest.yield_fixture(scope="module")
 def dvs(request):
     name = request.config.getoption("--dvsname")
@@ -1009,6 +1008,13 @@ def testlog(request, dvs):
     dvs.runcmd("logger === start test %s ===" % request.node.name)
     yield testlog
     dvs.runcmd("logger === finish test %s ===" % request.node.name)
+
+@pytest.yield_fixture(scope="class")
+def dvs_acl_manager(request, dvs):
+    request.cls.dvs_acl = dvs_acl.DVSAcl(dvs.get_asic_db(),
+                                         dvs.get_config_db(),
+                                         dvs.get_state_db(),
+                                         dvs.get_counters_db())
 
 ##################### DPB fixtures ###########################################
 @pytest.yield_fixture(scope="module")
