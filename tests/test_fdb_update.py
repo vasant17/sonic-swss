@@ -265,7 +265,7 @@ class TestFdbUpdate(object):
         # clear fdb
         dvs.runcmd("sonic-clear fdb all")
 
-    def test_FDBLearnedAndFlushed(dvs, testlog):
+    def test_FDBLearnedAndFlushed(self, dvs, testlog):
         dvs.setup_db()
 
         dvs.runcmd("sonic-clear fdb all")

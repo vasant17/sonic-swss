@@ -15,6 +15,7 @@ from datetime import datetime
 from swsscommon import swsscommon
 from dvslib import dvs_database as dvs_db
 from dvslib import dvs_acl
+from dvslib import dvs_vlan
 
 def ensure_system(cmd):
     (rc, output) = commands.getstatusoutput(cmd)
@@ -1008,6 +1009,14 @@ def testlog(request, dvs):
     dvs.runcmd("logger === start test %s ===" % request.node.name)
     yield testlog
     dvs.runcmd("logger === finish test %s ===" % request.node.name)
+
+@pytest.yield_fixture(scope="class")
+def dvs_vlan_manager(request, dvs):
+    request.cls.dvs_vlan = dvs_vlan.DVSVlan(dvs.get_asic_db(),
+                                            dvs.get_config_db(),
+                                            dvs.get_state_db(),
+                                            dvs.get_counters_db(),
+                                            dvs.get_app_db())
 
 @pytest.yield_fixture(scope="class")
 def dvs_acl_manager(request, dvs):

@@ -1585,7 +1585,7 @@ sai_status_t PortsOrch::removePort(sai_object_id_t port_id)
     sai_status_t status = sai_port_api->remove_port(port_id);
     if (status != SAI_STATUS_SUCCESS)
     {
-        return status; 
+        return status;
     }
 
     m_portCount--;
@@ -2274,13 +2274,13 @@ void PortsOrch::doPortTask(Consumer &consumer)
             if (bridge_port_oid != SAI_NULL_OBJECT_ID)
             {
                 // Bridge port OID is set on a port as long as
-                // port is part of at-least one VLAN. 
-                // Ideally this should be tracked by SAI redis. 
+                // port is part of at-least one VLAN.
+                // Ideally this should be tracked by SAI redis.
                 // Until then, let this snippet be here.
                 SWSS_LOG_WARN("Cannot remove port as bridge port OID is present %" PRIx64 , bridge_port_oid);
                 it++;
                 continue;
-            } 
+            }
 
             if (m_portList[alias].m_init)
             {
