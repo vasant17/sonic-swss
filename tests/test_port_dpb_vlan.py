@@ -30,9 +30,8 @@ class TestPortDPBVlan(object):
         assert(p.exists_in_asic_db() == True)
 
         self.dvs_vlan.remove_vlan_member(vlan, p.get_name())
-        time.sleep(1)
         # Verify that port is deleted
-        assert(p.exists_in_asic_db() == False)
+        assert(p.not_exists_in_asic_db() == True)
 
         #Create the port back and delete the VLAN
         p.write_to_config_db()
@@ -70,7 +69,7 @@ class TestPortDPBVlan(object):
 
         self.dvs_vlan.remove_vlan_member(vlan, "Ethernet0")
         self.dvs_vlan.get_and_verify_vlan_member_ids(0)
-        assert(p.exists_in_asic_db() == False)
+        assert(p.not_exists_in_asic_db() == True)
         #print "Ethernet0 removed from VLAN and also from ASIC DB"
 
         dpb.create_child_ports(dvs, p, 4)
@@ -99,7 +98,7 @@ class TestPortDPBVlan(object):
             self.dvs_vlan.remove_vlan_member(vlan, cp.get_name())
             vlan_member_count = vlan_member_count - 1
             self.dvs_vlan.get_and_verify_vlan_member_ids(vlan_member_count)
-            assert(cp.exists_in_asic_db() == False)
+            assert(cp.not_exists_in_asic_db() == True)
         #print "Deleted %s from VLAN"%port_names
 
         p.write_to_config_db()
@@ -149,7 +148,7 @@ class TestPortDPBVlan(object):
 
         self.dvs_vlan.remove_vlan_member(vlans[2], "Ethernet0")
         self.dvs_vlan.get_and_verify_vlan_member_ids(0)
-        assert(p.exists_in_asic_db() == False)
+        assert(p.not_exists_in_asic_db() == True)
         #print "Ethernet0 removed from VLAN102 and also from ASIC DB"
 
         dpb.create_child_ports(dvs, p, 4)
@@ -163,7 +162,7 @@ class TestPortDPBVlan(object):
             cp.delete_from_config_db()
             assert(cp.exists_in_config_db() == False)
             assert(cp.exists_in_app_db() == False)
-            assert(cp.exists_in_asic_db() == False)
+            assert(cp.not_exists_in_asic_db() == True)
         #print "Deleted %s and verified all DBs"%port_names
 
         #Add back Ethernet0
@@ -220,7 +219,7 @@ class TestPortDPBVlan(object):
                 self.dvs_vlan.remove_vlan_member(vlan_name, port_name)
 
             self.dvs_vlan.get_and_verify_vlan_member_ids((num_ports*num_vlans)-(len(ports)*num_vlans))
-            assert(p.exists_in_asic_db() == False)
+            assert(p.not_exists_in_asic_db() == True)
         #print "All %d ports are removed from all %d VLANs and deleted"%(num_ports,num_vlans)
 
         for p in ports:

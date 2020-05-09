@@ -251,7 +251,7 @@ class TestFdbUpdate(object):
         dvs.set_interface_status("Ethernet72", "down")
 
         # remove vlan ip
-        self.remove_entry_tbl(dvs.cdb, "VLAN_INTERFACE", key)
+        dvs.remove_ip_address("Vlan6", "6.6.6.1/24")
 
         # bring down vlan
         dvs.set_interface_status("Vlan6", "down")
@@ -298,7 +298,7 @@ class TestFdbUpdate(object):
         time.sleep(2)
 
         # check that the FDB entries were inserted into ASIC DB
-        mac = get_mac_by_bridge_id(dvs, iface_2_bridge_port_id[PORT])
+        mac = self.get_mac_by_bridge_id(dvs, iface_2_bridge_port_id[PORT])
         assert server_mac in mac
 
         # bring down port
@@ -307,7 +307,7 @@ class TestFdbUpdate(object):
         time.sleep(2)
 
         # fdb should be flushed
-        mac = get_mac_by_bridge_id(dvs, iface_2_bridge_port_id[PORT])
+        mac = self.get_mac_by_bridge_id(dvs, iface_2_bridge_port_id[PORT])
         assert not mac
 
         # remove vlan ip
