@@ -159,8 +159,7 @@ void FdbOrch::update(sai_fdb_event_t type, const sai_fdb_entry_t* entry, sai_obj
         break;
 
     case SAI_FDB_EVENT_FLUSHED:
-        if ((bridge_port_id == SAI_NULL_OBJECT_ID && entry->bv_id == SAI_NULL_OBJECT_ID)
-            || (bridge_port_id && entry->bv_id == SAI_NULL_OBJECT_ID))
+        if (entry->bv_id == SAI_NULL_OBJECT_ID)
         {
             for (auto itr = m_entries.begin(); itr != m_entries.end();)
             {
@@ -175,20 +174,31 @@ void FdbOrch::update(sai_fdb_event_t type, const sai_fdb_entry_t* entry, sai_obj
                 update.add = false;
                 itr++;
 
-                storeFdbEntryState(update);
+                if (SAI_NULL_OBJECT_ID != bridge_port_id)
+                {
+                    if (!m_portsOrch->getPortByBridgePortId(bridge_port_id, update.port))
+                    {
+                        SWSS_LOG_ERROR("Failed to get port by bridge port ID 0x%" PRIx64, bridge_port_id);
+                        return;
+                    }
+                    SWSS_LOG_DEBUG("FDB flush: mac: %s  port: %s bridge port OID: 0x%" PRIx64 ".",
+                                   update.entry.mac.to_string().c_str(),
+                                   update.port.m_alias.c_str(),
+                                   bridge_port_id);
+                }
+                else
+                {
+                    SWSS_LOG_DEBUG("FDB flush: mac: %s",
+                                   update.entry.mac.to_string().c_str());
+                }
 
-                SWSS_LOG_DEBUG("FdbOrch notification: mac %s was removed", update.entry.mac.to_string().c_str());
+                storeFdbEntryState(update);
 
                 for (auto observer: m_observers)
                 {
                     observer->update(SUBJECT_TYPE_FDB_CHANGE, &update);
                 }
             }
-        }
-        else if (bridge_port_id && entry->bv_id == SAI_NULL_OBJECT_ID)
-        {
-            /*this is a placeholder for flush port fdb case, not supported yet.*/
-            SWSS_LOG_ERROR("FdbOrch notification: not supported flush port fdb action, port_id = 0x%" PRIx64 ", bv_id = 0x%" PRIx64 ".", bridge_port_id, entry->bv_id);
         }
         else if (bridge_port_id == SAI_NULL_OBJECT_ID && entry->bv_id != SAI_NULL_OBJECT_ID)
         {

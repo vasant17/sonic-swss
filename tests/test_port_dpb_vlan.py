@@ -10,79 +10,85 @@ class TestPortDPBVlan(object):
         (exitcode, num) = dvs.runcmd(['sh', '-c', "awk \'/%s/,ENDFILE {print;}\' /var/log/syslog | grep \"%s\" | wc -l" % (marker, log)])
         assert num.strip() >= str(expected_cnt)
 
-    '''
-    @pytest.mark.skip()
-    '''
     def test_dependency(self, dvs):
-
         vlan = "100"
         p = Port(dvs, "Ethernet0")
         p.sync_from_config_db()
+
+        # 1. Create VLAN100
         self.dvs_vlan.create_vlan(vlan)
-        #print "Created VLAN100"
+
+        # 2. Add Ethernet0 to VLAN100
         self.dvs_vlan.create_vlan_member(vlan, p.get_name())
-        #print "Added Ethernet0 to VLAN100"
+
+        # 3. Add log marker to syslog
         marker = dvs.add_log_marker()
+
+        # 4. Delete Ethernet0 from config DB. Sleep for 2 seconds.
         p.delete_from_config_db()
-        #Verify that we are looping on dependency
         time.sleep(2)
+
+        # 5. Verify that we are waiting in portsorch for the port
+        #    to be removed from VLAN, by looking at the log
         self.check_syslog(dvs, marker, "Cannot remove port as bridge port OID is present", 1)
+
+        # 6. Also verify that port is still present in ASIC DB.
         assert(p.exists_in_asic_db() == True)
 
+        # 7. Remove port from VLAN
         self.dvs_vlan.remove_vlan_member(vlan, p.get_name())
-        # Verify that port is deleted
+
+        # 8. Verify that port is removed from ASIC DB
         assert(p.not_exists_in_asic_db() == True)
 
-        #Create the port back and delete the VLAN
+        # 9. Re-create port Ethernet0 and verify that it is
+        #    present in CONFIG, APPL, and ASIC DBs
         p.write_to_config_db()
-        #print "Added port:%s to config DB"%p.get_name()
         p.verify_config_db()
-        #print "Config DB verification passed!"
         p.verify_app_db()
-        #print "Application DB verification passed!"
         p.verify_asic_db()
-        #print "ASIC DB verification passed!"
 
+        # 10. Remove VLAN100 and verify that its removed.
         self.dvs_vlan.remove_vlan(vlan)
+        self.dvs_vlan.get_and_verify_vlan_ids(0)
 
-    '''
-    @pytest.mark.skip()
-    '''
     def test_one_port_one_vlan(self, dvs):
         dpb = DPB()
         vlan = "100"
 
-        # Breakout testing with VLAN dependency
+        # 1. Create VLAN100 and add Ethernet0 as member
         self.dvs_vlan.create_vlan(vlan)
-        #print "Created VLAN100"
         self.dvs_vlan.create_vlan_member(vlan, "Ethernet0")
         self.dvs_vlan.get_and_verify_vlan_member_ids(1)
-        #print "Added Ethernet0 to VLAN100"
 
+        # 2. Delete Ethernet0 from config DB. Verify that its deleted
+        #    CONFIG and APPL DB and its still present in ASIC DB
         p = Port(dvs, "Ethernet0")
         p.sync_from_config_db()
         p.delete_from_config_db()
         assert(p.exists_in_config_db() == False)
         assert(p.exists_in_app_db() == False)
         assert(p.exists_in_asic_db() == True)
-        #print "Ethernet0 deleted from config DB and APP DB, waiting to be removed from VLAN"
 
+        # 3. Verify that Ethernet0 gets deleted from ASIC DB once
+        #    its removed from VLAN100.
         self.dvs_vlan.remove_vlan_member(vlan, "Ethernet0")
         self.dvs_vlan.get_and_verify_vlan_member_ids(0)
         assert(p.not_exists_in_asic_db() == True)
-        #print "Ethernet0 removed from VLAN and also from ASIC DB"
 
+        # 4. To simulate port breakout, 1x100G --> 4x25G, create 4 ports
         dpb.create_child_ports(dvs, p, 4)
 
-        # Breakin testing with VLAN dependency
+        # 5. Add all 4 ports to VLAN100
         port_names = ["Ethernet0", "Ethernet1", "Ethernet2", "Ethernet3"]
         vlan_member_count = 0
         for pname in port_names:
             self.dvs_vlan.create_vlan_member(vlan, pname)
             vlan_member_count = vlan_member_count + 1
             self.dvs_vlan.get_and_verify_vlan_member_ids(vlan_member_count)
-        #print "Add %s to VLAN"%port_names
 
+        # 6. Delete 4 ports from CONFIG DB. Verify that they are all deleted
+        #    from CONFIG and APPL DB but still present in ASIC DB
         child_ports = []
         for pname in port_names:
             cp = Port(dvs, pname)
@@ -92,69 +98,70 @@ class TestPortDPBVlan(object):
             assert(cp.exists_in_app_db() == False)
             assert(cp.exists_in_asic_db() == True)
             child_ports.append(cp)
-        #print "Deleted %s from config DB and APP DB"%port_names
 
+        # 7. Remove all 4 ports from VLAN100 and verify that they all get
+        #    deleted from ASIC DB
         for cp in child_ports:
             self.dvs_vlan.remove_vlan_member(vlan, cp.get_name())
             vlan_member_count = vlan_member_count - 1
             self.dvs_vlan.get_and_verify_vlan_member_ids(vlan_member_count)
             assert(cp.not_exists_in_asic_db() == True)
-        #print "Deleted %s from VLAN"%port_names
 
+        # 8. Re-create Ethernet0 and verify that its created all 3 DBs
         p.write_to_config_db()
-        #print "Added port:%s to config DB"%p.get_name()
         p.verify_config_db()
-        #print "Config DB verification passed!"
         p.verify_app_db()
-        #print "Application DB verification passed!"
         p.verify_asic_db()
-        #print "ASIC DB verification passed!"
 
+        # 9. Remove VLAN100 and verify the same
         self.dvs_vlan.remove_vlan(vlan)
+        self.dvs_vlan.get_and_verify_vlan_ids(0)
 
-    '''
-    @pytest.mark.skip()
-    '''
     def test_one_port_multiple_vlan(self, dvs):
 
         dpb = DPB()
         vlans = ["100", "101", "102"]
+
+        # 1. Create 3 VLANs
         for vlan in vlans:
             self.dvs_vlan.create_vlan(vlan)
-        #print "Created VLAN100, VLAN101, and VLAN102"
 
+        # 2. Add Ethernet0 to all 3 VLANs and verify
         for vlan in vlans:
             self.dvs_vlan.create_vlan_member(vlan, "Ethernet0")
         self.dvs_vlan.get_and_verify_vlan_member_ids(len(vlans))
-        #print "Added Ethernet0 to all three VLANs"
 
+        # 3. Delete Ethernet0 from CONFIG DB. Verify that it is deleted
+        #    from CONFIG and APPl DB, whereas still present in ASIC DB.
         p = Port(dvs, "Ethernet0")
         p.sync_from_config_db()
         p.delete_from_config_db()
         assert(p.exists_in_config_db() == False)
         assert(p.exists_in_app_db() == False)
         assert(p.exists_in_asic_db() == True)
-        #print "Ethernet0 deleted from config DB and APP DB, waiting to be removed from VLANs"
 
+        # 4. Remove Ethernet0 from one of the VLANs and verify that
+        #    its still present in ASIC DB
         self.dvs_vlan.remove_vlan_member(vlans[0], "Ethernet0")
         self.dvs_vlan.get_and_verify_vlan_member_ids(len(vlans)-1)
         assert(p.exists_in_asic_db() == True)
-        #print "Ethernet0 removed from VLAN100 and its still present in ASIC DB"
 
+        # 5. Remove Ethernet0 from one more VLAN and verify that
+        #    its still present in ASIC DB
         self.dvs_vlan.remove_vlan_member(vlans[1], "Ethernet0")
         self.dvs_vlan.get_and_verify_vlan_member_ids(len(vlans)-2)
         assert(p.exists_in_asic_db() == True)
-        #print "Ethernet0 removed from VLAN101 and its still present in ASIC DB"
 
+        # 6. Remove Ethernet0 from last VLAN as well and verify that
+        #    its deleted from ASIC DB
         self.dvs_vlan.remove_vlan_member(vlans[2], "Ethernet0")
         self.dvs_vlan.get_and_verify_vlan_member_ids(0)
         assert(p.not_exists_in_asic_db() == True)
-        #print "Ethernet0 removed from VLAN102 and also from ASIC DB"
 
+        # 7. To Simulate 1x40G --> 4x10G, create 4 ports
         dpb.create_child_ports(dvs, p, 4)
-        #print "1X40G ---> 4x10G verified"
 
-        # Breakin
+        # 8. To Simulate 4x10G --> 1x40G, delete all 4 ports and re-create Ethernet0
         port_names = ["Ethernet0", "Ethernet1", "Ethernet2", "Ethernet3"]
         for pname in port_names:
             cp = Port(dvs, pname)
@@ -163,24 +170,18 @@ class TestPortDPBVlan(object):
             assert(cp.exists_in_config_db() == False)
             assert(cp.exists_in_app_db() == False)
             assert(cp.not_exists_in_asic_db() == True)
-        #print "Deleted %s and verified all DBs"%port_names
 
-        #Add back Ethernet0
         p.write_to_config_db()
         p.verify_config_db()
         p.verify_app_db()
         p.verify_asic_db()
-        #print "Added port:%s and verified all DBs"%p.get_name()
 
-        # Remove all three VLANs
+        # 9. Remove all 3 VLANs and verify the same
         self.dvs_vlan.remove_vlan("100")
         self.dvs_vlan.remove_vlan("101")
         self.dvs_vlan.remove_vlan("102")
-        #print "All three VLANs removed"
+        self.dvs_vlan.get_and_verify_vlan_ids(0)
 
-    '''
-    @pytest.mark.skip()
-    '''
     def test_all_port_10_vlans(self, dvs):
         num_vlans = 10
         start_vlan = 100
@@ -195,23 +196,27 @@ class TestPortDPBVlan(object):
         for i in range(num_vlans):
             vlan_names.append(str(start_vlan + i))
 
+        # 1. Create 10 VLANs
         for vlan_name in vlan_names:
             self.dvs_vlan.create_vlan(vlan_name)
-        #print "%d VLANs created"%num_vlans
 
+        # 2. Add all 32 ports to all 10 VLANs
         for port_name in port_names:
             for vlan_name in vlan_names:
                 self.dvs_vlan.create_vlan_member(vlan_name, port_name, tagging_mode = "tagged")
-        #print "All %d ports are added to all %d VLANs"%(num_ports,num_vlans)
         self.dvs_vlan.get_and_verify_vlan_member_ids(num_ports*num_vlans)
 
+        # 3. Do the following for each port
+        #    3.1. Delete port from CONFIG DB and verify that its deleted from
+        #         CONFIG DB and APPL DB but not from ASIC DB.
+        #    3.2. Remove the port from all 10 VLANs and verify that it
+        #         gets deleted from ASIC DB
         ports = []
         for port_name in port_names:
             p = Port(dvs, port_name)
             ports.append(p)
             p.sync_from_config_db()
             p.delete_from_config_db()
-            #print "Deleted %s from config DB"%port_name
             assert(p.exists_in_config_db() == False)
             assert(p.exists_in_app_db() == False)
             assert(p.exists_in_asic_db() == True)
@@ -220,15 +225,15 @@ class TestPortDPBVlan(object):
 
             self.dvs_vlan.get_and_verify_vlan_member_ids((num_ports*num_vlans)-(len(ports)*num_vlans))
             assert(p.not_exists_in_asic_db() == True)
-        #print "All %d ports are removed from all %d VLANs and deleted"%(num_ports,num_vlans)
 
+        # 4. Re-create all ports and verify the same
         for p in ports:
             p.write_to_config_db()
             p.verify_config_db()
             p.verify_app_db()
             p.verify_asic_db()
-        #print "Re-created all %d ports"%num_ports
 
+        # 5. Remove all VLANs and verify the same
         for vlan_name in vlan_names:
             self.dvs_vlan.remove_vlan(vlan_name)
-        #print "All %d VLANs removed"%num_vlans
+        self.dvs_vlan.get_and_verify_vlan_ids(0)

@@ -6,6 +6,7 @@ from dvslib.dvs_common import PollingConfig
 
 @pytest.mark.usefixtures("testlog")
 @pytest.mark.usefixtures('dvs_vlan_manager')
+@pytest.mark.usefixtures('dvs_lag_manager')
 class TestVlan(object):
 
     def check_syslog(self, dvs, marker, process, err_log, vlan_str, expected_cnt):
@@ -218,10 +219,10 @@ class TestVlan(object):
         lag_id = "0001"
         lag_interface = "PortChannel{}".format(lag_id)
 
-        self.dvs_vlan.create_port_channel(lag_id)
+        self.dvs_lag.create_port_channel(lag_id)
         lag_entries = self.dvs_vlan.asic_db.wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_LAG", 1)
 
-        self.dvs_vlan.create_port_channel_member(lag_id, lag_member)
+        self.dvs_lag.create_port_channel_member(lag_id, lag_member)
 
         # Verify the LAG has been initialized properly
         lag_member_entries = self.dvs_vlan.asic_db.wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_LAG_MEMBER", 1)
@@ -242,10 +243,10 @@ class TestVlan(object):
         self.dvs_vlan.remove_vlan(vlan)
         self.dvs_vlan.get_and_verify_vlan_ids(0)
 
-        self.dvs_vlan.remove_port_channel_member(lag_id, lag_member)
+        self.dvs_lag.remove_port_channel_member(lag_id, lag_member)
         self.dvs_vlan.asic_db.wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_LAG_MEMBER", 0)
 
-        self.dvs_vlan.remove_port_channel(lag_id)
+        self.dvs_lag.remove_port_channel(lag_id)
         self.dvs_vlan.asic_db.wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_LAG", 0)
 
     def test_AddVlanMemberWithNonExistVlan(self, dvs):
