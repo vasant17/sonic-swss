@@ -2295,7 +2295,7 @@ void PortsOrch::doPortTask(Consumer &consumer)
                 Port p;
                 if (getPort(port_id, p))
                 {
-                    PortUpdate update = {p, false };
+                    PortUpdate update = {p, false};
                     notify(SUBJECT_TYPE_PORT_CHANGE, static_cast<void *>(&update));
                 }
             }
@@ -2551,6 +2551,8 @@ void PortsOrch::doLagTask(Consumer &consumer)
             // Retrieve attributes
             uint32_t mtu = 0;
             string learn_mode;
+            bool operation_status_changed = false;
+            string operation_status;
 
             for (auto i : kfvFieldsValues(t))
             {
@@ -2564,20 +2566,22 @@ void PortsOrch::doLagTask(Consumer &consumer)
                 }
                 else if (fvField(i) == "oper_status")
                 {
-                    if (fvValue(i) == "down")
+                    operation_status = fvValue(i);
+                    if (!string_oper_status.count(operation_status))
                     {
-                        gNeighOrch->ifChangeInformNextHop(alias, false);
-                        Port lag;
-                        if (getPort(alias, lag))
-                        {
-                            SWSS_LOG_NOTICE("Flushing FDB entries for %s with bridge port id: %" PRIx64
-                                " as it is DOWN", alias.c_str(), lag.m_bridge_port_id);
-                            flushFDBEntries(lag.m_bridge_port_id);
-                        }
+                        SWSS_LOG_ERROR("Invalid operation status value:%s", operation_status.c_str());
+                        it++;
+                        continue;
                     }
-                    else
+
+                    gNeighOrch->ifChangeInformNextHop(alias,
+                                                      (operation_status == "down") ?
+                                                      false : true);
+                    Port lag;
+                    if (getPort(alias, lag))
                     {
-                        gNeighOrch->ifChangeInformNextHop(alias, true);
+                        operation_status_changed = (string_oper_status.at(operation_status) != lag.m_oper_status) ?
+                                                   true : false;
                     }
                 }
             }
@@ -2600,6 +2604,19 @@ void PortsOrch::doLagTask(Consumer &consumer)
             }
             else
             {
+
+                if (!operation_status.empty())
+                {
+                    l.m_oper_status = string_oper_status.at(operation_status);
+                    m_portList[alias] = l;
+                }
+                if (operation_status_changed)
+                {
+                    PortOperStateUpdate update;
+                    update.port = l;
+                    update.operStatus = string_oper_status.at(operation_status);
+                    notify(SUBJECT_TYPE_PORT_OPER_STATE_CHANGE, static_cast<void *>(&update));
+                }
                 if (mtu != 0)
                 {
                     l.m_mtu = mtu;
@@ -3153,9 +3170,6 @@ bool PortsOrch::removeBridgePort(Port &port)
                 hostif_vlan_tag[SAI_HOSTIF_VLAN_TAG_STRIP], port.m_alias.c_str());
         return false;
     }
-
-    /* Flush FDB entries pointing to this bridge port */
-    flushFDBEntries(port.m_bridge_port_id);
 
     /* Remove bridge port */
     status = sai_bridge_api->remove_bridge_port(port.m_bridge_port_id);
@@ -3806,13 +3820,6 @@ void PortsOrch::doTask(NotificationConsumer &consumer)
 
             updatePortOperStatus(port, status);
 
-            if (status == SAI_PORT_OPER_STATUS_DOWN)
-            {
-                SWSS_LOG_NOTICE("Flushing FDB entries for %s with bridge port id: %" PRIx64
-                    " as it is DOWN", port.m_alias.c_str(), port.m_bridge_port_id);
-                flushFDBEntries(port.m_bridge_port_id);
-            }
-
             /* update m_portList */
             m_portList[port.m_alias] = port;
         }
@@ -3844,6 +3851,9 @@ void PortsOrch::updatePortOperStatus(Port &port, sai_port_oper_status_t status)
     {
         SWSS_LOG_WARN("Inform nexthop operation failed for interface %s", port.m_alias.c_str());
     }
+
+    PortOperStateUpdate update = {port, status};
+    notify(SUBJECT_TYPE_PORT_OPER_STATE_CHANGE, static_cast<void *>(&update));
 }
 
 /*
@@ -3995,24 +4005,5 @@ void PortsOrch::getPortSerdesVal(const std::string& val_str,
     {
         lane_val = (uint32_t)std::stoul(lane_str, NULL, 16);
         lane_values.push_back(lane_val);
-    }
-}
-
-void PortsOrch::flushFDBEntries(sai_object_id_t bridge_port_id)
-{
-    sai_attribute_t attr;
-    vector<sai_attribute_t> attrs;
-    sai_status_t rv;
-
-    SWSS_LOG_INFO("Flushing the port with bridge port id: %" PRIx64, bridge_port_id);
-
-    attr.id = SAI_FDB_FLUSH_ATTR_BRIDGE_PORT_ID;
-    attr.value.oid = bridge_port_id;
-    attrs.push_back(attr);
-    rv = sai_fdb_api->flush_fdb_entries(gSwitchId, (uint32_t)attrs.size(), attrs.data());
-
-    if (rv != SAI_STATUS_SUCCESS)
-    {
-        SWSS_LOG_ERROR("Flush fdb by bridge port id: %" PRIx64 " failed: %d", bridge_port_id, rv);
     }
 }

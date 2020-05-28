@@ -60,6 +60,7 @@ private:
     void doTask(NotificationConsumer& consumer);
 
     void updateVlanMember(const VlanMemberUpdate&);
+    void updatePortOperState(const PortOperStateUpdate&);
     bool addFdbEntry(const FdbEntry&, const string&, const string&);
     bool removeFdbEntry(const FdbEntry&);
     void flushFDBEntries(sai_object_id_t bridge_port_oid,

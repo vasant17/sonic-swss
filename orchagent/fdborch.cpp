@@ -228,6 +228,12 @@ void FdbOrch::update(SubjectType type, void *cntx)
             updateVlanMember(*update);
             break;
         }
+        case SUBJECT_TYPE_PORT_OPER_STATE_CHANGE:
+        {
+            PortOperStateUpdate *update = reinterpret_cast<PortOperStateUpdate *>(cntx);
+            updatePortOperState(*update);
+            break;
+        }
         default:
             break;
     }
@@ -436,7 +442,7 @@ void FdbOrch::flushFDBEntries(sai_object_id_t bridge_port_oid,
 
     SWSS_LOG_ENTER();
 
-    if (SAI_NULL_OBJECT_ID == bridge_port_oid ||
+    if (SAI_NULL_OBJECT_ID == bridge_port_oid &&
         SAI_NULL_OBJECT_ID == vlan_oid)
     {
         SWSS_LOG_WARN("Couldn't flush FDB. Bridge port OID: 0x%" PRIx64 " bvid:%" PRIx64 ",",
@@ -444,13 +450,19 @@ void FdbOrch::flushFDBEntries(sai_object_id_t bridge_port_oid,
         return;
     }
 
-    attr.id = SAI_FDB_FLUSH_ATTR_BRIDGE_PORT_ID;
-    attr.value.oid = bridge_port_oid;
-    attrs.push_back(attr);
+    if (SAI_NULL_OBJECT_ID != bridge_port_oid)
+    {
+        attr.id = SAI_FDB_FLUSH_ATTR_BRIDGE_PORT_ID;
+        attr.value.oid = bridge_port_oid;
+        attrs.push_back(attr);
+    }
 
-    attr.id = SAI_FDB_FLUSH_ATTR_BV_ID;
-    attr.value.oid = vlan_oid;
-    attrs.push_back(attr);
+    if (SAI_NULL_OBJECT_ID != vlan_oid)
+    {
+        attr.id = SAI_FDB_FLUSH_ATTR_BV_ID;
+        attr.value.oid = vlan_oid;
+        attrs.push_back(attr);
+    }
 
     SWSS_LOG_INFO("Flushing FDB bridge_port_oid: 0x%" PRIx64 ", and bvid_oid:0x%" PRIx64 ".", bridge_port_oid, vlan_oid);
 
@@ -459,6 +471,17 @@ void FdbOrch::flushFDBEntries(sai_object_id_t bridge_port_oid,
     {
         SWSS_LOG_ERROR("Flushing FDB failed. rv:%d", rv);
     }
+}
+
+void FdbOrch::updatePortOperState(const PortOperStateUpdate& update)
+{
+    SWSS_LOG_ENTER();
+    if (update.operStatus == SAI_PORT_OPER_STATUS_DOWN)
+    {
+        swss::Port p = update.port;
+        flushFDBEntries(p.m_bridge_port_id, SAI_NULL_OBJECT_ID);
+    }
+    return;
 }
 
 void FdbOrch::updateVlanMember(const VlanMemberUpdate& update)
