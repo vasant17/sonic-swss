@@ -2575,13 +2575,13 @@ void PortsOrch::doLagTask(Consumer &consumer)
                     }
 
                     gNeighOrch->ifChangeInformNextHop(alias,
-                                                      (operation_status == "down") ?
-                                                      false : true);
+                                                 (operation_status == "down"));
                     Port lag;
                     if (getPort(alias, lag))
                     {
-                        operation_status_changed = (string_oper_status.at(operation_status) != 
-                                                    lag.m_oper_status) ? true : false;
+                        operation_status_changed = 
+                           (string_oper_status.at(operation_status) != 
+                                                    lag.m_oper_status);
                     }
                 }
             }
