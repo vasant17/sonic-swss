@@ -2575,7 +2575,7 @@ void PortsOrch::doLagTask(Consumer &consumer)
                     }
 
                     gNeighOrch->ifChangeInformNextHop(alias,
-                                                 (operation_status == "down"));
+                                                 (operation_status == "up"));
                     Port lag;
                     if (getPort(alias, lag))
                     {
