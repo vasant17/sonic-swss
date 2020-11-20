@@ -8,9 +8,9 @@ class DVSVlan(object):
         self.counters_db = cntrdb
         self.app_db = appdb
 
-    def create_vlan(self, vlan):
-        vlan = "Vlan{}".format(vlan)
-        vlan_entry = {"vlanid": vlan}
+    def create_vlan(self, vlanID):
+        vlan = "Vlan{}".format(vlanID)
+        vlan_entry = {"vlanid": vlanID}
         self.config_db.create_entry("VLAN", vlan, vlan_entry)
 
     def remove_vlan(self, vlan):

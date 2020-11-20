@@ -1134,6 +1134,23 @@ class DockerVirtualSwitch:
 
         return self.state_db
 
+    def get_fvs_dict(self, fvs):
+        fvs_dict = {}
+        for fv in fvs:
+            fvs_dict.update({fv[0]:fv[1]})
+        return fvs_dict
+
+    def change_port_breakout_mode(self, intf_name, target_mode, options=""):
+        cmd = "config interface breakout %s %s -y %s"%(intf_name, target_mode, options)
+        self.runcmd(cmd)
+        time.sleep(2)
+
+    def verify_port_breakout_mode(self, intf_name, current_mode):
+        brkout_cfg_tbl = swsscommon.Table(self.cdb, "BREAKOUT_CFG")
+        (status, fvs) = brkout_cfg_tbl.get(intf_name)
+        assert(status == True)
+        fvs_dict = self.get_fvs_dict(fvs)
+        assert(fvs_dict["brkout_mode"] == current_mode)
 
 class DockerVirtualChassisTopology:
     def __init__(
@@ -1415,7 +1432,7 @@ class DockerVirtualChassisTopology:
                 chassis_container_name = device_info["hostname"] + "." + self.ns
 
                 port_info = config["PORT"]
-            
+
             for port, config in port_info.items():
                 if "admin_status" not in config:
                     continue
@@ -1424,13 +1441,13 @@ class DockerVirtualChassisTopology:
                     instance_to_port_status_map[chassis_container_name] = []
 
                 instance_to_port_status_map[chassis_container_name].append((port, config.get("admin_status")))
-            
+
             return instance_to_port_status_map
 
     def handle_chassis_connections(self):
         if self.oper != "create":
             return
-        
+
         instance_to_port_status_map = self.get_chassis_instance_port_statuses()
         for chassis_instance, port_statuses in instance_to_port_status_map.items():
             if chassis_instance not in self.dvss:
@@ -1479,7 +1496,6 @@ class DockerVirtualChassisTopology:
         ret2 = self.verify_crashes()
         print("vct verifications passed ? %s" % (ret1 and ret2))
         return ret1 and ret2
-
 
 @pytest.yield_fixture(scope="module")
 def dvs(request) -> DockerVirtualSwitch:
@@ -1586,11 +1602,9 @@ def create_dpb_config_file(dvs):
     cmd = "cp /tmp/dpb_config_db.json /etc/sonic/config_db.json"
     dvs.runcmd(cmd)
 
-
 def remove_dpb_config_file(dvs):
     cmd = "mv /etc/sonic/config_db.json.bak /etc/sonic/config_db.json"
     dvs.runcmd(cmd)
-
 
 @pytest.yield_fixture(scope="module")
 def dpb_setup_fixture(dvs):
