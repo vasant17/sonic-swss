@@ -24,8 +24,13 @@ public:
 
 private:
     bool isIntfStateOk(const std::string &alias);
+    bool addMac(struct nl_msg* msg_p, const MacAddress& mac);
+    bool addIp(struct nl_msg* msg_p, const IpAddress& ip);
     bool setNeighbor(const std::string& alias, const IpAddress& ip, const MacAddress& mac);
+    bool deleteNeighbor(const std::string& alias, const IpAddress& ip, const MacAddress& mac);
 
+    void doDeleteNeighTask(Consumer &consumer);
+    void doSetNeighTask(Consumer &consumer);
     void doTask(Consumer &consumer);
 
     Table m_statePortTable, m_stateLagTable, m_stateVlanTable, m_stateIntfTable, m_stateNeighRestoreTable;

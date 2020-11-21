@@ -10,6 +10,8 @@
 #include "ipaddress.h"
 #include "nexthopkey.h"
 #include "netmsg.h"
+#include "producerstatetable.h"
+#include "schema.h"
 
 #define NHFLAGS_IFDOWN                  0x1 // nexthop's outbound i/f is down
 
@@ -60,7 +62,7 @@ private:
     PortsOrch *m_portsOrch;
     IntfsOrch *m_intfsOrch;
     FdbOrch *m_fdbOrch;
-    struct nl_sock *m_nl_sock;
+    ProducerStateTable m_appNeighResolveProducer;
 
     NeighborTable m_syncdNeighbors;
     NextHopTable m_syncdNextHops;
@@ -75,7 +77,7 @@ private:
     bool clearNextHopFlag(const NextHopKey &, const uint32_t);
 
     void processFDBFlushUpdate(const FdbFlushUpdate &);
-    bool flushNeighborEntry(const NeighborEntry &, const MacAddress &);
+    bool resolveNeighborEntry(const NeighborEntry &, const MacAddress &);
 
     void doTask(Consumer &consumer);
 };

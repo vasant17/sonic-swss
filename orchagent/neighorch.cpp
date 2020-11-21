@@ -19,47 +19,17 @@ extern FgNhgOrch *gFgNhgOrch;
 
 const int neighorch_pri = 30;
 
-static bool send_message(struct nl_sock *socket_p, struct nl_msg *msg_p)
+NeighOrch::NeighOrch(DBConnector *appDb, string tableName, IntfsOrch *intfsOrch, FdbOrch *fdbOrch, PortsOrch *portsOrch) :
+        Orch(appDb, tableName, neighorch_pri),
+        m_intfsOrch(intfsOrch),
+        m_fdbOrch(fdbOrch),
+        m_portsOrch(portsOrch),
+        m_appNeighResolveProducer(appDb, APP_NEIGH_RESOLVE_TABLE_NAME)
 {
-    int err = 0;
-
-    if (!socket_p)
-    {
-        SWSS_LOG_ERROR("Netlink socket null pointer");
-        return false;
-    }
-
-    if ((err = nl_send_auto(socket_p, msg_p)) < 0)
-    {
-        SWSS_LOG_ERROR("Netlink send message failed, error '%s'", nl_geterror(err));
-        return false;
-    }
-
-    nlmsg_free(msg_p);
-    return true;
-}
-
-NeighOrch::NeighOrch(DBConnector *db, string tableName, IntfsOrch *intfsOrch, FdbOrch *fdbOrch, PortsOrch *portsOrch) :
-        Orch(db, tableName, neighorch_pri), m_intfsOrch(intfsOrch), m_fdbOrch(fdbOrch), m_portsOrch(portsOrch)
-{
-    int err = 0;
-
     SWSS_LOG_ENTER();
 
     m_fdbOrch->attach(this);
     gPortsOrch->attach(this);
-
-    m_nl_sock = nl_socket_alloc();
-    if (!m_nl_sock)
-    {
-        SWSS_LOG_ERROR("Netlink socket is NOT allocacted");
-    }
-    else if ((err = nl_connect(m_nl_sock, NETLINK_ROUTE)) < 0)
-    {
-        SWSS_LOG_ERROR("Netlink socket connect failed, error '%s'", nl_geterror(err));
-        nl_socket_free(m_nl_sock);
-        m_nl_sock = NULL;
-    }
 }
 
 NeighOrch::~NeighOrch()
@@ -68,108 +38,24 @@ NeighOrch::~NeighOrch()
     {
         m_fdbOrch->detach(this);
     }
-
-    if (m_nl_sock)
-    {
-        nl_close(m_nl_sock);
-        nl_socket_free(m_nl_sock);
-    }
 }
 
-bool NeighOrch::flushNeighborEntry(const NeighborEntry &entry, const MacAddress &mac)
+bool NeighOrch::resolveNeighborEntry(const NeighborEntry &entry, const MacAddress &mac)
 {
-    SWSS_LOG_ENTER();
+    vector<FieldValueTuple>    data;
+    IpAddress                  ip = entry.ip_address;
+    string                     key, alias = entry.alias;
 
-    IpAddress    ip = entry.ip_address;
-    string       alias = entry.alias;
+    key = alias + ":" + entry.ip_address.to_string();
+    FieldValueTuple fvTuple("mac", mac.to_string().c_str());
+    data.push_back(fvTuple);
 
-    SWSS_LOG_INFO("Flushing ARP entry '%s' as FDB entry '%s' is flushed",
-                   ip.to_string().c_str(), mac.to_string().c_str());
-
-    if (!m_nl_sock)
-    {
-        SWSS_LOG_ERROR("Netlink socket is NOT allocated");
-        return false;
-    }
-
-    struct nl_msg *msg_p = nlmsg_alloc();
-    if (!msg_p)
-    {
-        SWSS_LOG_ERROR("Netlink message alloc failed for '%s'", ip.to_string().c_str());
-        return false;
-    }
-
-    auto flags = (NLM_F_REQUEST | NLM_F_ACK);
-    struct nlmsghdr *hdr = nlmsg_put(msg_p, NL_AUTO_PORT, NL_AUTO_SEQ, RTM_DELNEIGH, 0, flags);
-
-    if (!hdr)
-    {
-        SWSS_LOG_ERROR("Netlink message header alloc failed for '%s'", ip.to_string().c_str());
-        nlmsg_free(msg_p);
-        return false;
-    }
-
-    struct ndmsg *nd_msg_p = static_cast<struct ndmsg *>
-                           (nlmsg_reserve(msg_p, sizeof(struct ndmsg), NLMSG_ALIGNTO));
-    if (!nd_msg_p)
-    {
-        SWSS_LOG_ERROR("Netlink ndmsg reserve failed for '%s'", ip.to_string().c_str());
-        nlmsg_free(msg_p);
-        return false;
-    }
-
-    memset(nd_msg_p, 0, sizeof(struct ndmsg));
-
-    nd_msg_p->ndm_ifindex = if_nametoindex(alias.c_str());
-
-    // Fill in the IPV4/IPV6 address
-    auto addr_len = ip.isV4()? sizeof(struct in_addr) : sizeof(struct in6_addr);
-
-    struct rtattr *rta_p = static_cast<struct rtattr *>
-                         (nlmsg_reserve(msg_p, sizeof(struct rtattr) + addr_len, NLMSG_ALIGNTO));
-    if (!rta_p)
-    {
-        SWSS_LOG_ERROR("Netlink rtattr (IP) failed for '%s'", ip.to_string().c_str());
-        nlmsg_free(msg_p);
-        return false;
-    }
-
-    rta_p->rta_type = NDA_DST;
-    rta_p->rta_len = static_cast<short>(RTA_LENGTH(addr_len));
-
-    nd_msg_p->ndm_type = RTN_UNICAST;
-    auto ip_addr = ip.getIp();
-
-    if (ip.isV4())
-    {
-        nd_msg_p->ndm_family = AF_INET;
-        memcpy(RTA_DATA(rta_p), &ip_addr.ip_addr.ipv4_addr, addr_len);
-    }
-    else
-    {
-        nd_msg_p->ndm_family = AF_INET6;
-        memcpy(RTA_DATA(rta_p), &ip_addr.ip_addr.ipv6_addr, addr_len);
-    }
-
-    // Fill in the MAC address
-    auto mac_len = ETHER_ADDR_LEN;
-    auto mac_addr = mac.getMac();
-
-    rta_p = static_cast<struct rtattr *>
-          (nlmsg_reserve(msg_p, sizeof(struct rtattr) + mac_len, NLMSG_ALIGNTO));
-    if (!rta_p)
-    {
-        SWSS_LOG_ERROR("Netlink rtattr (MAC) failed for '%s'", ip.to_string().c_str());
-        nlmsg_free(msg_p);
-        return false;
-    }
-
-    rta_p->rta_type = NDA_LLADDR;
-    rta_p->rta_len = static_cast<short>(RTA_LENGTH(mac_len));
-    memcpy(RTA_DATA(rta_p), mac_addr, mac_len);
-
-    return send_message(m_nl_sock, msg_p);
+    SWSS_LOG_NOTICE("Flushing ARP entry '%s:%s --> %s'",
+                   alias.c_str(), ip.to_string().c_str(), mac.to_string().c_str());
+    m_appNeighResolveProducer.set(key, data);
+    return true;
 }
+
 /*
  * Function Name: processFDBFlushUpdate
  * Description:
@@ -186,13 +72,6 @@ void NeighOrch::processFDBFlushUpdate(const FdbFlushUpdate& update)
 {
     SWSS_LOG_NOTICE("processFDBFlushUpdate port: %s",
                     update.port.m_alias.c_str());
-
-    /*
-    if (update.port.m_admin_state_up == true &&
-        update.port.m_oper_status == SAI_PORT_OPER_STATUS_UP)
-    {
-        return;
-    } */
 
     for (auto entry : update.entries)
     {
@@ -215,11 +94,7 @@ void NeighOrch::processFDBFlushUpdate(const FdbFlushUpdate& update)
             if (neighborEntry.first.alias == vlan.m_alias &&
                 neighborEntry.second == entry.mac)
             {
-                SWSS_LOG_INFO("Flushing ARP [ %s , %s ] = { port: %s }",
-                               vlan.m_alias.c_str(),
-                               entry.mac.to_string().c_str(),
-                               update.port.m_alias.c_str());
-                flushNeighborEntry(neighborEntry.first, neighborEntry.second);
+                resolveNeighborEntry(neighborEntry.first, neighborEntry.second);
             }
         }
     }
