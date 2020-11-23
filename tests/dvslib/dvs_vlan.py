@@ -13,12 +13,12 @@ class DVSVlan(object):
         vlan_entry = {"vlanid": vlanID}
         self.config_db.create_entry("VLAN", vlan, vlan_entry)
 
-    def remove_vlan(self, vlan):
-        vlan = "Vlan{}".format(vlan)
+    def remove_vlan(self, vlanID):
+        vlan = "Vlan{}".format(vlanID)
         self.config_db.delete_entry("VLAN", vlan)
 
-    def create_vlan_member(self, vlan, interface, tagging_mode="untagged"):
-        member = "Vlan{}|{}".format(vlan, interface)
+    def create_vlan_member(self, vlanID, interface, tagging_mode="untagged"):
+        member = "Vlan{}|{}".format(vlanID, interface)
         if tagging_mode:
             member_entry = {"tagging_mode": tagging_mode}
         else:
@@ -26,8 +26,8 @@ class DVSVlan(object):
 
         self.config_db.create_entry("VLAN_MEMBER", member, member_entry)
 
-    def remove_vlan_member(self, vlan, interface):
-        member = "Vlan{}|{}".format(vlan, interface)
+    def remove_vlan_member(self, vlanID, interface):
+        member = "Vlan{}|{}".format(vlanID, interface)
         self.config_db.delete_entry("VLAN_MEMBER", member)
 
     def check_app_db_vlan_fields(self, fvs, admin_status="up", mtu="9100"):

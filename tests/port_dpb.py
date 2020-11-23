@@ -322,6 +322,26 @@ class DPB():
         p = Port(dvs, port_name)
         p.verify_breakout_mode(breakout_mode)
 
+    """
+    Examples:
+    --------------------------------------------------------------------------------------
+    | Root Port | Breakout Mode     | Lanes | Child Ports                                |
+    --------------------------------------------------------------------------------------
+    | Ethernet0 | 4x25G(10G)        | 4     | Ethernet0, Ethernet1, Ethernet2, Ethernet3 |
+    --------------------------------------------------------------------------------------
+    | Ethernet0 | 2x50G             | 4     | Ethernet0, Ethernet2                       |
+    --------------------------------------------------------------------------------------
+    | Ethernet0 | 1x100G(40G)       | 4     | Ethernet0                                  |
+    --------------------------------------------------------------------------------------
+  **| Ethernet0 | 2x25G(2)+1x50G(2) | 4     | Ethernet0, Ethernet1, Ethernet2            |
+    --------------------------------------------------------------------------------------
+  **| Ethernet0 | 1x50G(2)+2x25G(2) | 4     | Ethernet0, Ethernet2, Ethernet3           |
+    --------------------------------------------------------------------------------------
+    ** --> Asymmetric breakout modes
+    For symmetric breakout modes, this method directly calls _get_child_ports(),
+    and for asymmetric breakout modes, it breaks the mode with '+' as delimiter
+    and calls _get_child_ports() for each term while accumulating the result.
+    """
     def get_child_ports(self, root_port, breakout_mode):
 
         if '+' not in breakout_mode:
@@ -339,6 +359,29 @@ class DPB():
 
         return child_ports
 
+
+    """
+    Examples:
+    -----------------------------------------------------------------------------------
+    | Root Port | Breakout Mode | Lanes |  Child Ports                                |
+    -----------------------------------------------------------------------------------
+    | Ethernet0 | 4x25G(10G)    | 4     |  Ethernet0, Ethernet1, Ethernet2, Ethernet3 |
+    -----------------------------------------------------------------------------------
+    | Ethernet0 | 2x50G         | 4     |  Ethernet0, Ethernet2                       |
+    -----------------------------------------------------------------------------------
+    | Ethernet0 | 1x100G(40G)   | 4     |  Ethernet0                                  |
+    -----------------------------------------------------------------------------------
+   *| Ethernet0 | 2x25G(2)      | 2     |  Ethernet0, Ethernet1                       |
+    -----------------------------------------------------------------------------------
+   *| Ethernet2 | 1x50G(2)      | 2     |  Ethernet2                                  |
+    -----------------------------------------------------------------------------------
+   *| Ethernet0 | 1x50G(2)      | 2     |  Ethernet0                                  |
+    -----------------------------------------------------------------------------------
+   *| Ethernet2 | 2x25G(2)      | 2     |  Ethernet2, Ethernet3                       |
+    -----------------------------------------------------------------------------------
+    * -> Breakout modes in these cases are a term of asymmetric breakout modes. Please
+         refer above method
+    """
     def _get_child_ports(self, root_port, breakout_mode, lanes):
         count = int(breakout_mode.split('x')[0])
         port = int(root_port.split('Ethernet')[1])

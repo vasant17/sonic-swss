@@ -143,7 +143,7 @@ class ApplDbValidator(DVSDatabase):
             m = re.match(r"eth(\d+)", neighbor)
             if not m:
                 continue
-            assert int(m.group(1)) > 0
+            #assert int(m.group(1)) > 0
 
 
 class VirtualServer:
