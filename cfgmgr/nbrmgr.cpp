@@ -134,63 +134,6 @@ bool NbrMgr::addMac(struct nl_msg* msg_p, const MacAddress& mac)
     return true;
 }
 
-bool NbrMgr::deleteNeighbor(const string& alias, const IpAddress& ip, const MacAddress& mac)
-{
-    SWSS_LOG_ENTER();
-
-    SWSS_LOG_NOTICE("Remove ARP entry '%s:%s -> %s'",
-                   alias.c_str(), ip.to_string().c_str(), mac.to_string().c_str());
-
-    struct nl_msg *msg_p = nlmsg_alloc();
-    if (!msg_p)
-    {
-        SWSS_LOG_ERROR("Netlink message alloc failed for '%s'", ip.to_string().c_str());
-        return false;
-    }
-
-    auto flags = (NLM_F_REQUEST | NLM_F_ACK);
-    struct nlmsghdr *hdr_p = nlmsg_put(msg_p, NL_AUTO_PORT, NL_AUTO_SEQ, RTM_DELNEIGH, 0, flags);
-    if (!hdr_p)
-    {
-        SWSS_LOG_ERROR("Netlink message header alloc failed for '%s'", ip.to_string().c_str());
-        nlmsg_free(msg_p);
-        return false;
-    }
-
-    // Prepare ndmsg to remove an entry from neighbor table
-    struct ndmsg *nd_msg_p = static_cast<struct ndmsg *>
-                           (nlmsg_reserve(msg_p, sizeof(struct ndmsg), NLMSG_ALIGNTO));
-    if (!nd_msg_p)
-    {
-        SWSS_LOG_ERROR("Netlink ndmsg reserve failed for '%s'", ip.to_string().c_str());
-        nlmsg_free(msg_p);
-        return false;
-    }
-    memset(nd_msg_p, 0, sizeof(struct ndmsg));
-
-    // Fill in the interface
-    nd_msg_p->ndm_ifindex = if_nametoindex(alias.c_str());
-
-    // Fill in the IPv4/IPv6 address
-    if (!addIp(msg_p, ip))
-    {
-        nlmsg_free(msg_p);
-        return false;
-    }
-    nd_msg_p->ndm_type = RTN_UNICAST;
-    nd_msg_p->ndm_family = ip.isV4() ? AF_INET : AF_INET6;
-
-    // Fill in the MAC address
-    if (!addMac(msg_p, mac))
-    {
-        nlmsg_free(msg_p);
-        return false;
-    }
-
-    // Send ndmsg
-    return send_message(m_nl_sock, msg_p);
-}
-
 bool NbrMgr::setNeighbor(const string& alias, const IpAddress& ip, const MacAddress& mac)
 {
     SWSS_LOG_ENTER();
@@ -263,50 +206,20 @@ bool NbrMgr::setNeighbor(const string& alias, const IpAddress& ip, const MacAddr
     return send_message(m_nl_sock, msg_p);
 }
 
-void NbrMgr::doDeleteNeighTask(Consumer &consumer)
+void NbrMgr::doResolveNeighTask(Consumer &consumer)
 {
     SWSS_LOG_ENTER();
 
     auto it = consumer.m_toSync.begin();
     while (it != consumer.m_toSync.end())
     {
-        KeyOpFieldsValuesTuple t = it->second;
-        vector<string> keys = tokenize(kfvKey(t),delimiter);
-        const vector<FieldValueTuple>& data = kfvFieldsValues(t);
+        KeyOpFieldsValuesTuple    t = it->second;
+        vector<string>            keys = tokenize(kfvKey(t),delimiter);
+        MacAddress                mac;
+        IpAddress                 ip(keys[1]);
+        string                    alias(keys[0]);
 
-        string alias(keys[0]);
-        IpAddress ip(keys[1]);
-        string op = kfvOp(t);
-        MacAddress mac;
-        bool invalid_mac = false;
-
-        for (auto idx : data)
-        {
-            const auto &field = fvField(idx);
-            const auto &value = fvValue(idx);
-            if (field == "mac")
-            {
-                try
-                {
-                    mac = value;
-                }
-                catch (const std::invalid_argument& e)
-                {
-                    SWSS_LOG_ERROR("Invalid Mac addr '%s' for '%s'", value.c_str(), kfvKey(t).c_str());
-                    invalid_mac = true;
-                    break;
-                }
-            }
-        }
-
-
-        if (invalid_mac)
-        {
-            it = consumer.m_toSync.erase(it);
-            continue;
-        }
-
-        if (!deleteNeighbor(alias, ip, mac))
+        if (!setNeighbor(alias, ip, mac))
         {
             SWSS_LOG_ERROR("Neigh entry resolve failed for '%s'", kfvKey(t).c_str());
         }
@@ -317,6 +230,7 @@ void NbrMgr::doDeleteNeighTask(Consumer &consumer)
 void NbrMgr::doSetNeighTask(Consumer &consumer)
 {
     SWSS_LOG_ENTER();
+
 
     auto it = consumer.m_toSync.begin();
     while (it != consumer.m_toSync.end())
@@ -398,7 +312,7 @@ void NbrMgr::doTask(Consumer &consumer)
 
     if (table_name == APP_NEIGH_RESOLVE_TABLE_NAME)
     {
-        doDeleteNeighTask(consumer);
+        doResolveNeighTask(consumer);
     }
 
     SWSS_LOG_ERROR("Unknown REDIS table %s ", table_name.c_str());

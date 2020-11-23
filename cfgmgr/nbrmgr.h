@@ -27,9 +27,9 @@ private:
     bool addMac(struct nl_msg* msg_p, const MacAddress& mac);
     bool addIp(struct nl_msg* msg_p, const IpAddress& ip);
     bool setNeighbor(const std::string& alias, const IpAddress& ip, const MacAddress& mac);
-    bool deleteNeighbor(const std::string& alias, const IpAddress& ip, const MacAddress& mac);
+    //bool deleteNeighbor(const std::string& alias, const IpAddress& ip, const MacAddress& mac);
 
-    void doDeleteNeighTask(Consumer &consumer);
+    void doResolveNeighTask(Consumer &consumer);
     void doSetNeighTask(Consumer &consumer);
     void doTask(Consumer &consumer);
 

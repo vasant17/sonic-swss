@@ -29,7 +29,6 @@ NeighOrch::NeighOrch(DBConnector *appDb, string tableName, IntfsOrch *intfsOrch,
     SWSS_LOG_ENTER();
 
     m_fdbOrch->attach(this);
-    gPortsOrch->attach(this);
 }
 
 NeighOrch::~NeighOrch()
@@ -47,11 +46,13 @@ bool NeighOrch::resolveNeighborEntry(const NeighborEntry &entry, const MacAddres
     string                     key, alias = entry.alias;
 
     key = alias + ":" + entry.ip_address.to_string();
+    // We do NOT need to populate mac field as its NOT
+    // even used in nbrmgr during ARP resolve. But just keeping here.
     FieldValueTuple fvTuple("mac", mac.to_string().c_str());
     data.push_back(fvTuple);
 
-    SWSS_LOG_NOTICE("Flushing ARP entry '%s:%s --> %s'",
-                   alias.c_str(), ip.to_string().c_str(), mac.to_string().c_str());
+    SWSS_LOG_INFO("Flushing ARP entry '%s:%s --> %s'",
+                  alias.c_str(), ip.to_string().c_str(), mac.to_string().c_str());
     m_appNeighResolveProducer.set(key, data);
     return true;
 }
@@ -65,12 +66,11 @@ bool NeighOrch::resolveNeighborEntry(const NeighborEntry &entry, const MacAddres
  * SUBJECT_TYPE_FDB_FLUSH_CHANGE notification. Currently we only care for
  * deleted FDB entries. We flush neighbor entry that matches its
  * in-coming interface and MAC with FDB entry's VLAN name and MAC
- * respectively. Also this ensures that underlying physical port operation
- * status or admin state is DOWN.
+ * respectively.
  */
 void NeighOrch::processFDBFlushUpdate(const FdbFlushUpdate& update)
 {
-    SWSS_LOG_NOTICE("processFDBFlushUpdate port: %s",
+    SWSS_LOG_INFO("processFDBFlushUpdate port: %s",
                     update.port.m_alias.c_str());
 
     for (auto entry : update.entries)
