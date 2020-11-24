@@ -258,7 +258,6 @@ class TestPortDPBSystem(object):
 
     @pytest.mark.skip("TODO: Enable after upstreaming fix from LinkedIn repo")
     def test_cli_command_with_force_option(self, dvs, dvs_acl):
-
         dvs.setup_db()
         dpb = DPB()
 
@@ -340,7 +339,7 @@ class TestPortDPBSystem(object):
         # Configure IPv4 address on Ethernet8
         self.add_ip_address(dvs, "Ethernet8", "10.0.0.8/31")
 
-        intf_entries = tbl.getKeys()
+        intf_entries = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE")
         # one loopback router interface and one port based router interface
         assert len(intf_entries) == 2
 
