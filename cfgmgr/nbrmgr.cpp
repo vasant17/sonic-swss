@@ -92,54 +92,12 @@ bool NbrMgr::isNeighRestoreDone()
     return false;
 }
 
-
-bool NbrMgr::addIp(struct nl_msg* msg_p, const IpAddress& ip)
-{
-    auto ip_addr = ip.getIp();
-    auto addr_len = ip.isV4()? sizeof(struct in_addr) : sizeof(struct in6_addr);
-
-    struct rtattr *rta_p = static_cast<struct rtattr *>
-                           (nlmsg_reserve(msg_p, sizeof(struct rtattr) + addr_len, NLMSG_ALIGNTO));
-    if (!rta_p)
-    {
-        SWSS_LOG_ERROR("Netlink rtattr (IP) failed for '%s'", ip.to_string().c_str());
-        return false;
-    }
-
-    rta_p->rta_type = NDA_DST;
-    rta_p->rta_len = static_cast<short>(RTA_LENGTH(addr_len));
-    ip.isV4() ? memcpy(RTA_DATA(rta_p), &ip_addr.ip_addr.ipv4_addr, addr_len) :
-                memcpy(RTA_DATA(rta_p), &ip_addr.ip_addr.ipv6_addr, addr_len);
-
-    return true;
-}
-
-bool NbrMgr::addMac(struct nl_msg* msg_p, const MacAddress& mac)
-{
-    auto mac_len = ETHER_ADDR_LEN;
-    auto mac_addr = mac.getMac();
-
-    struct rtattr *rta_p = static_cast<struct rtattr *>
-                         (nlmsg_reserve(msg_p, sizeof(struct rtattr) + mac_len, NLMSG_ALIGNTO));
-    if (!rta_p)
-    {
-        SWSS_LOG_ERROR("Netlink rtattr (MAC) failed for '%s'", mac.to_string().c_str());
-        return false;
-    }
-
-    rta_p->rta_type = NDA_LLADDR;
-    rta_p->rta_len = static_cast<short>(RTA_LENGTH(mac_len));
-    memcpy(RTA_DATA(rta_p), mac_addr, mac_len);
-
-    return true;
-}
-
 bool NbrMgr::setNeighbor(const string& alias, const IpAddress& ip, const MacAddress& mac)
 {
     SWSS_LOG_ENTER();
 
-    struct nl_msg *msg_p = nlmsg_alloc();
-    if (!msg_p)
+    struct nl_msg *msg = nlmsg_alloc();
+    if (!msg)
     {
         SWSS_LOG_ERROR("Netlink message alloc failed for '%s'", ip.to_string().c_str());
         return false;
@@ -147,45 +105,62 @@ bool NbrMgr::setNeighbor(const string& alias, const IpAddress& ip, const MacAddr
 
     auto flags = (NLM_F_REQUEST | NLM_F_ACK | NLM_F_CREATE | NLM_F_REPLACE);
 
-    struct nlmsghdr *hdr_p = nlmsg_put(msg_p, NL_AUTO_PORT, NL_AUTO_SEQ, RTM_NEWNEIGH, 0, flags);
-    if (!hdr_p)
+    struct nlmsghdr *hdr = nlmsg_put(msg, NL_AUTO_PORT, NL_AUTO_SEQ, RTM_NEWNEIGH, 0, flags);
+    if (!hdr)
     {
         SWSS_LOG_ERROR("Netlink message header alloc failed for '%s'", ip.to_string().c_str());
-        nlmsg_free(msg_p);
+        nlmsg_free(msg);
         return false;
     }
 
-    // Prepare ndmsg to add an entry to neighbor table
-    struct ndmsg *nd_msg_p = static_cast<struct ndmsg *>
-                           (nlmsg_reserve(msg_p, sizeof(struct ndmsg), NLMSG_ALIGNTO));
-    if (!nd_msg_p)
+    struct ndmsg *nd_msg = static_cast<struct ndmsg *>
+                           (nlmsg_reserve(msg, sizeof(struct ndmsg), NLMSG_ALIGNTO));
+    if (!nd_msg)
     {
         SWSS_LOG_ERROR("Netlink ndmsg reserve failed for '%s'", ip.to_string().c_str());
-        nlmsg_free(msg_p);
+        nlmsg_free(msg);
         return false;
     }
-    memset(nd_msg_p, 0, sizeof(struct ndmsg));
 
-    // Populate interface
-    nd_msg_p->ndm_ifindex = if_nametoindex(alias.c_str());
+    memset(nd_msg, 0, sizeof(struct ndmsg));
 
-    // Populate IP
-    if (!addIp(msg_p, ip))
+    nd_msg->ndm_ifindex = if_nametoindex(alias.c_str());
+
+    auto addr_len = ip.isV4()? sizeof(struct in_addr) : sizeof(struct in6_addr);
+
+    struct rtattr *rta = static_cast<struct rtattr *>
+                         (nlmsg_reserve(msg, sizeof(struct rtattr) + addr_len, NLMSG_ALIGNTO));
+    if (!rta)
     {
-        nlmsg_free(msg_p);
+        SWSS_LOG_ERROR("Netlink rtattr (IP) failed for '%s'", ip.to_string().c_str());
+        nlmsg_free(msg);
         return false;
     }
-    nd_msg_p->ndm_type = RTN_UNICAST;
-    nd_msg_p->ndm_family = ip.isV4() ? AF_INET : AF_INET6;
 
-    // Populate MAC is provided
+    rta->rta_type = NDA_DST;
+    rta->rta_len = static_cast<short>(RTA_LENGTH(addr_len));
+
+    nd_msg->ndm_type = RTN_UNICAST;
+    auto ip_addr = ip.getIp();
+
+    if (ip.isV4())
+    {
+        nd_msg->ndm_family = AF_INET;
+        memcpy(RTA_DATA(rta), &ip_addr.ip_addr.ipv4_addr, addr_len);
+    }
+    else
+    {
+        nd_msg->ndm_family = AF_INET6;
+        memcpy(RTA_DATA(rta), &ip_addr.ip_addr.ipv6_addr, addr_len);
+    }
+
     if (!mac)
     {
         /*
          * If mac is not provided, expected to resolve the MAC
          */
-        nd_msg_p->ndm_state = NUD_DELAY;
-        nd_msg_p->ndm_flags = NTF_USE;
+        nd_msg->ndm_state = NUD_DELAY;
+        nd_msg->ndm_flags = NTF_USE;
 
         SWSS_LOG_INFO("Resolve request for '%s'", ip.to_string().c_str());
     }
@@ -193,17 +168,26 @@ bool NbrMgr::setNeighbor(const string& alias, const IpAddress& ip, const MacAddr
     {
         SWSS_LOG_INFO("Set mac address '%s'", mac.to_string().c_str());
 
-        if (!addMac(msg_p, mac))
+        nd_msg->ndm_state = NUD_PERMANENT;
+
+        auto mac_len = ETHER_ADDR_LEN;
+        auto mac_addr = mac.getMac();
+
+        struct rtattr *rta = static_cast<struct rtattr *>
+                             (nlmsg_reserve(msg, sizeof(struct rtattr) + mac_len, NLMSG_ALIGNTO));
+        if (!rta)
         {
-            nlmsg_free(msg_p);
+            SWSS_LOG_ERROR("Netlink rtattr (MAC) failed for '%s'", ip.to_string().c_str());
+            nlmsg_free(msg);
             return false;
         }
 
-        nd_msg_p->ndm_state = NUD_PERMANENT;
+        rta->rta_type = NDA_LLADDR;
+        rta->rta_len = static_cast<short>(RTA_LENGTH(mac_len));
+        memcpy(RTA_DATA(rta), mac_addr, mac_len);
     }
 
-    // Send ndmsg
-    return send_message(m_nl_sock, msg_p);
+    return send_message(m_nl_sock, msg);
 }
 
 void NbrMgr::doResolveNeighTask(Consumer &consumer)
