@@ -11,6 +11,12 @@ from port_dpb import DPB
 from dvslib.dvs_common import PollingConfig
 
 ARP_FLUSH_POLLING = PollingConfig(polling_interval=0.01, timeout=10, strict=True)
+"""
+Below prefix should be same as the one specified for Ethernet8
+in port_breakout_config_db.json in sonic-buildimage/platform/vs/docker-sonic-vs/
+"""
+Ethernet8_IP = "10.0.0.8/31"
+Ethernet8_IPME = "10.0.0.8/32"
 
 @pytest.mark.usefixtures('dpb_setup_fixture')
 @pytest.mark.usefixtures('dvs_vlan_manager')
@@ -95,6 +101,33 @@ class TestPortDPBSystem(object):
             tbl_name = "PORT"
         dvs_cfg_db.create_entry(tbl_name, interface, {'admin_status':status})
         time.sleep(1)
+
+    """
+    Below two methods are used as polling functions, and the
+    prefix used in these methods should be same as from
+    port_breakout_config_db.json, which is copied to VS container
+    from sonic-buildimage/platform/vs/docker-sonic-vs/ during
+    container initialization(start.sh script)
+    """
+    def _check_route_in_asic_db(self):
+        routes = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
+        for route in routes:
+            rt = json.loads(route)
+            if rt["dest"] == Ethernet8_IP:
+                subnet_found = True
+            if rt["dest"] == Ethernet8_IPME:
+                ip2me_found = True
+
+        return ((subnet_found and ip2me_found), routes)
+
+    def _check_route_not_in_asic_db(self):
+        routes = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
+        for route in routes:
+            rt = json.loads(route)
+            if rt["dest"] == Ethernet8_IP or \
+               rt["dest"] == Ethernet8_IPME:
+                return (False, route)
+        return (True, routes)
 
     def verify_only_ports_exist(self, dvs, port_names):
         all_port_names = ["Ethernet0", "Ethernet1", "Ethernet2", "Ethernet3"]
@@ -326,9 +359,8 @@ class TestPortDPBSystem(object):
         self.dvs_vlan.get_and_verify_vlan_ids(0)
 
         # check ASIC router interface database
-        intf_entries = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE")
         # one loopback router interface
-        assert len(intf_entries) == 1
+        dvs.get_asic_db().wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE", 1)
 
         # Bring up port
         self.set_admin_status(dvs, "Ethernet8", "up")
@@ -337,22 +369,15 @@ class TestPortDPBSystem(object):
         self.create_l3_intf(dvs, "Ethernet8", "");
 
         # Configure IPv4 address on Ethernet8
-        self.add_ip_address(dvs, "Ethernet8", "10.0.0.8/31")
+        self.add_ip_address(dvs, "Ethernet8", Ethernt8_IP)
 
-        intf_entries = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE")
+
         # one loopback router interface and one port based router interface
-        assert len(intf_entries) == 2
+        dvs.get_asic_db().wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE", 2)
 
         # check ASIC route database
-        routes = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
-        for route in routes:
-            rt = json.loads(route)
-            if rt["dest"] == "10.0.0.8/31":
-                subnet_found = True
-            if rt["dest"] == "10.0.0.8/32":
-                ip2me_found = True
-
-        assert subnet_found and ip2me_found
+        status, result = wait_for_result(_check_route_in_asic_db)
+        assert status == True
 
         # Breakout Ethernet8 WITH "-f" option and ensure cleanup happened
         dpb.verify_port_breakout_mode(dvs, "Ethernet8", breakoutMode1x)
@@ -360,18 +385,12 @@ class TestPortDPBSystem(object):
         dpb.verify_port_breakout_mode(dvs, "Ethernet8", breakoutMode2x)
 
         # check ASIC router interface database
-        intf_entries = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE")
         # one loopback router interface
-        assert len(intf_entries) == 1
+        dvs.get_asic_db().wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE", 1)
 
         # check ASIC database
-        routes = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
-        for route in routes:
-            rt = json.loads(route)
-            if rt["dest"] == "10.0.0.8/31":
-                assert False
-            if rt["dest"] == "10.0.0.8/32":
-                assert False
+        status, result = wait_for_result(_check_route_not_in_asic_db)
+        assert status == True
 
         dpb.verify_port_breakout_mode(dvs, "Ethernet8", breakoutMode2x)
         dvs.change_port_breakout_mode("Ethernet8", breakoutMode1x)
@@ -492,9 +511,8 @@ class TestPortDPBSystem(object):
         ##### Interface dependency test ############
 
         # check ASIC router interface database
-        intf_entries = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE")
         # one loopback router interface
-        assert len(intf_entries) == 1
+        dvs.get_asic_db().wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE", 1)
 
         # Breakout Ethernet8 WITH "-l" option and ensure
         # ip address gets configured as per port_breakout_config_db.json
@@ -502,20 +520,12 @@ class TestPortDPBSystem(object):
         dvs.change_port_breakout_mode("Ethernet8", breakoutMode2x, breakoutOption)
         dpb.verify_port_breakout_mode(dvs, "Ethernet8", breakoutMode2x)
 
-        intf_entries = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE")
         # one loopback router interface and one port based router interface
-        assert len(intf_entries) == 2
+        dvs.get_asic_db().wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE", 2)
 
         # check ASIC route database
-        routes = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
-        for route in routes:
-            rt = json.loads(route)
-            if rt["dest"] == "10.0.0.8/31":
-                subnet_found = True
-            if rt["dest"] == "10.0.0.8/32":
-                ip2me_found = True
-
-        assert subnet_found and ip2me_found
+        status, result = wait_for_result(_check_route_in_asic_db)
+        assert status == True
 
         # Breakout Ethernet8 WITH "-f" option and ensure cleanup happened
         dpb.verify_port_breakout_mode(dvs, "Ethernet8", breakoutMode2x)
@@ -523,18 +533,12 @@ class TestPortDPBSystem(object):
         dpb.verify_port_breakout_mode(dvs, "Ethernet8", breakoutMode1x)
 
         # check ASIC router interface database
-        intf_entries = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE")
         # one loopback router interface
-        assert len(intf_entries) == 1
+        dvs.get_asic_db().wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE", 1)
 
         # check ASIC database
-        routes = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
-        for route in routes:
-            rt = json.loads(route)
-            if rt["dest"] == "10.0.0.8/31":
-                assert False
-            if rt["dest"] == "10.0.0.8/32":
-                assert False
+        status, result = wait_for_result(_check_route_not_in_asic_db)
+        assert status == True
 
     @pytest.mark.skip("TODO: Enable after upstreaming fix from LinkedIn repo")
     def test_cli_command_negative(self, dvs, dvs_acl):

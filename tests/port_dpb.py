@@ -343,7 +343,6 @@ class DPB():
     and calls _get_child_ports() for each term while accumulating the result.
     """
     def get_child_ports(self, root_port, breakout_mode):
-
         if '+' not in breakout_mode:
             return self._get_child_ports(root_port, breakout_mode, self.MAX_LANES)
 
@@ -358,7 +357,6 @@ class DPB():
             root_port = 'Ethernet' + str(root_port_num)
 
         return child_ports
-
 
     """
     Examples:
