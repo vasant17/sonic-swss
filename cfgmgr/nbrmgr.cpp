@@ -215,7 +215,6 @@ void NbrMgr::doSetNeighTask(Consumer &consumer)
 {
     SWSS_LOG_ENTER();
 
-
     auto it = consumer.m_toSync.begin();
     while (it != consumer.m_toSync.end())
     {
@@ -292,12 +291,11 @@ void NbrMgr::doTask(Consumer &consumer)
     if (table_name == CFG_NEIGH_TABLE_NAME)
     {
         doSetNeighTask(consumer);
-    }
-
-    if (table_name == APP_NEIGH_RESOLVE_TABLE_NAME)
+    } else if (table_name == APP_NEIGH_RESOLVE_TABLE_NAME)
     {
         doResolveNeighTask(consumer);
+    } else
+    {
+        SWSS_LOG_ERROR("Unknown REDIS table %s ", table_name.c_str());
     }
-
-    SWSS_LOG_ERROR("Unknown REDIS table %s ", table_name.c_str());
 }

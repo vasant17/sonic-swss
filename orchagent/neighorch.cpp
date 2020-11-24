@@ -1,7 +1,4 @@
 #include <assert.h>
-#include <inttypes.h>
-#include <netlink/cache.h>
-
 #include "neighorch.h"
 #include "logger.h"
 #include "swssnet.h"

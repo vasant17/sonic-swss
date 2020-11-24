@@ -9,7 +9,6 @@
 
 #include "ipaddress.h"
 #include "nexthopkey.h"
-#include "netmsg.h"
 #include "producerstatetable.h"
 #include "schema.h"
 
