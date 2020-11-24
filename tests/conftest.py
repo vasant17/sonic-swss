@@ -1131,12 +1131,6 @@ class DockerVirtualSwitch:
 
         return self.state_db
 
-    def get_fvs_dict(self, fvs):
-        fvs_dict = {}
-        for fv in fvs:
-            fvs_dict.update({fv[0]:fv[1]})
-        return fvs_dict
-
     def change_port_breakout_mode(self, intf_name, target_mode, options=""):
         cmd = f"config interface breakout {intf_name} {target_mode} -y {options}"
         self.runcmd(cmd)
