@@ -1138,16 +1138,9 @@ class DockerVirtualSwitch:
         return fvs_dict
 
     def change_port_breakout_mode(self, intf_name, target_mode, options=""):
-        cmd = "config interface breakout %s %s -y %s"%(intf_name, target_mode, options)
+        cmd = f"config interface breakout {intf_name} {target_mode} -y {options}"
         self.runcmd(cmd)
         time.sleep(2)
-
-    def verify_port_breakout_mode(self, intf_name, current_mode):
-        brkout_cfg_tbl = swsscommon.Table(self.cdb, "BREAKOUT_CFG")
-        (status, fvs) = brkout_cfg_tbl.get(intf_name)
-        assert(status == True)
-        fvs_dict = self.get_fvs_dict(fvs)
-        assert(fvs_dict["brkout_mode"] == current_mode)
 
 class DockerVirtualChassisTopology:
     def __init__(
@@ -1522,7 +1515,6 @@ def dvs(request) -> DockerVirtualSwitch:
         dvs.runcmd("mv /etc/sonic/config_db.json.orig /etc/sonic/config_db.json")
         dvs.ctn_restart()
 
-
 @pytest.yield_fixture(scope="module")
 def vct(request):
     vctns = request.config.getoption("--vctns")
@@ -1542,13 +1534,11 @@ def vct(request):
     vct.get_logs(request.module.__name__)
     vct.destroy()
 
-
 @pytest.yield_fixture
 def testlog(request, dvs):
     dvs.runcmd(f"logger === start test {request.node.name} ===")
     yield testlog
     dvs.runcmd(f"logger === finish test {request.node.name} ===")
-
 
 ################# DVSLIB module manager fixtures #############################
 @pytest.fixture(scope="class")
@@ -1588,7 +1578,6 @@ def dvs_mirror_manager(request, dvs):
 def dvs_policer_manager(request, dvs):
     request.cls.dvs_policer = dvs_policer.DVSPolicer(dvs.get_asic_db(),
                                                      dvs.get_config_db())
-
 
 ##################### DPB fixtures ###########################################
 def create_dpb_config_file(dvs):

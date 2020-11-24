@@ -193,12 +193,14 @@ class TestPortDPBSystem(object):
         dpb = DPB()
 
         dvs.change_port_breakout_mode(root_port, breakout_mode)
-        dvs.verify_port_breakout_mode(root_port, breakout_mode)
+        dpb.verify_port_breakout_mode(dvs, root_port, breakout_mode)
         expected_ports = dpb.get_child_ports(root_port, breakout_mode)
         self.verify_only_ports_exist(dvs, expected_ports)
 
     def test_port_breakout_with_vlan(self, dvs):
         dvs.setup_db()
+        dpb = DPB()
+
         portName = "Ethernet0"
         vlanID = "100"
         breakoutMode1 = "1x100G[40G]"
@@ -218,11 +220,11 @@ class TestPortDPBSystem(object):
         self.dvs_vlan.get_and_verify_vlan_member_ids(1)
 
         # Breakout port from 1x100G[40G] --> 4x25G[10G]
-        dvs.verify_port_breakout_mode("Ethernet0", breakoutMode1)
+        dpb.verify_port_breakout_mode(dvs, "Ethernet0", breakoutMode1)
         dvs.change_port_breakout_mode("Ethernet0", breakoutMode2, breakoutOption)
 
         # Verify DPB is successful
-        dvs.verify_port_breakout_mode("Ethernet0", breakoutMode2)
+        dpb.verify_port_breakout_mode(dvs, "Ethernet0", breakoutMode2)
 
         # Verify port is removed from VLAN
         self.dvs_vlan.get_and_verify_vlan_member_ids(0)
@@ -237,7 +239,7 @@ class TestPortDPBSystem(object):
         dvs.change_port_breakout_mode("Ethernet0", breakoutMode1)
 
         # Verify DPB is successful
-        dvs.verify_port_breakout_mode("Ethernet0", breakoutMode1)
+        dpb.verify_port_breakout_mode(dvs, "Ethernet0", breakoutMode1)
 
     @pytest.mark.skip("TODO: Enable after upstreaming fix from LinkedIn repo")
     def test_port_breakout_with_acl(self, dvs, dvs_acl):
@@ -264,11 +266,11 @@ class TestPortDPBSystem(object):
 
         # Verify current breakout mode, perform breakout without force dependency
         # delete option
-        dvs.verify_port_breakout_mode("Ethernet0", "1x100G[40G]")
+        dpb.verify_port_breakout_mode(dvs, "Ethernet0", "1x100G[40G]")
         dvs.change_port_breakout_mode("Ethernet0", "4x25G[10G]")
 
         # Verify that breakout did NOT succeed
-        dvs.verify_port_breakout_mode("Ethernet0", "1x100G[40G]")
+        dpb.verify_port_breakout_mode(dvs, "Ethernet0", "1x100G[40G]")
 
         # Do breakout with force option, and verify that it succeeds
         dvs.change_port_breakout_mode("Ethernet0", "4x25G[10G]", "-f")
@@ -622,6 +624,7 @@ class TestPortDPBSystem(object):
     def test_dpb_arp_flush(self, dvs):
         dvs.setup_db()
         dvs_asic_db = dvs.get_asic_db()
+        dpb = DPB()
 
         portName = "Ethernet0"
         vrfName = ""
@@ -657,20 +660,21 @@ class TestPortDPBSystem(object):
                                          {"SAI_NEIGHBOR_ENTRY_ATTR_DST_MAC_ADDRESS":srv0MAC})
 
         # Breakout port and make sure NEIGHBOR entry is removed
-        dvs.verify_port_breakout_mode("Ethernet0", "1x100G[40G]")
+        dpb.verify_port_breakout_mode(dvs, "Ethernet0", "1x100G[40G]")
         dvs.change_port_breakout_mode("Ethernet0", "4x25G[10G]", "-f")
-        dvs.verify_port_breakout_mode("Ethernet0", "4x25G[10G]")
+        dpb.verify_port_breakout_mode(dvs, "Ethernet0", "4x25G[10G]")
 
         #Verify ARP/Neighbor entry is removed
         dvs_asic_db.wait_for_deleted_entry("ASIC_STATE:SAI_OBJECT_TYPE_NEIGHBOR_ENTRY", \
                                            intf_entries[0], ARP_FLUSH_POLLING)
 
         dvs.change_port_breakout_mode("Ethernet0", "1x100G[40G]")
-        dvs.verify_port_breakout_mode("Ethernet0", "1x100G[40G]")
+        dpb.verify_port_breakout_mode(dvs, "Ethernet0", "1x100G[40G]")
 
     def test_dpb_arp_flush_vlan(self, dvs):
         dvs.setup_db()
         dvs_asic_db = dvs.get_asic_db()
+        dpb = DPB()
 
         self.clear_srv_config(dvs)
         vlanID = "100"
@@ -712,16 +716,16 @@ class TestPortDPBSystem(object):
                                          {"SAI_NEIGHBOR_ENTRY_ATTR_DST_MAC_ADDRESS":srv0MAC})
 
         # Breakout port and make sure NEIGHBOR entry is removed
-        dvs.verify_port_breakout_mode("Ethernet0", "1x100G[40G]")
+        dpb.verify_port_breakout_mode(dvs, "Ethernet0", "1x100G[40G]")
         dvs.change_port_breakout_mode("Ethernet0", "4x25G[10G]", "-f")
-        dvs.verify_port_breakout_mode("Ethernet0", "4x25G[10G]")
+        dpb.verify_port_breakout_mode(dvs, "Ethernet0", "4x25G[10G]")
 
         #Verify ARP/Neighbor entry is removed
         dvs_asic_db.wait_for_deleted_entry("ASIC_STATE:SAI_OBJECT_TYPE_NEIGHBOR_ENTRY", \
                                            intf_entries[0], ARP_FLUSH_POLLING)
 
         dvs.change_port_breakout_mode("Ethernet0", "1x100G[40G]")
-        dvs.verify_port_breakout_mode("Ethernet0", "1x100G[40G]")
+        dpb.verify_port_breakout_mode(dvs, "Ethernet0", "1x100G[40G]")
 
         # Remove IP from interface, and then remove interface
         self.remove_ip_address(dvs, vlanName, ipAddress)
@@ -733,6 +737,7 @@ class TestPortDPBSystem(object):
     def test_dpb_arp_flush_on_port_oper_shut(self, dvs):
         dvs.setup_db()
         dvs_asic_db = dvs.get_asic_db()
+        dpb = DPB()
 
         self.clear_srv_config(dvs)
         vlanID = "100"
@@ -796,6 +801,7 @@ class TestPortDPBSystem(object):
     def test_dpb_arp_flush_on_vlan_member_remove(self, dvs):
         dvs.setup_db()
         dvs_asic_db = dvs.get_asic_db()
+        dpb = DPB()
 
         self.clear_srv_config(dvs)
         vlanID = "100"

@@ -225,9 +225,6 @@ class Port():
             assert(fvs_dict['SAI_PORT_ATTR_HW_LANE_LIST'] == self.get_lanes_asic_db_str())
         assert(fvs_dict['SAI_PORT_ATTR_SPEED'] == str(self.get_speed()))
 
-    def verify_breakout_mode(self, breakout_mode):
-        self._dvs.get_config_db().wait_for_field_match("BREAKOUT_CFG", self.get_name(), {"brkout_mode": breakout_mode})
-
 class DPB():
     MAX_LANES = 4
     def breakin(self, dvs, port_names):
@@ -319,8 +316,7 @@ class DPB():
             p.verify_asic_db()
 
     def verify_port_breakout_mode(self, dvs, port_name, breakout_mode):
-        p = Port(dvs, port_name)
-        p.verify_breakout_mode(breakout_mode)
+        dvs.get_config_db().wait_for_field_match("BREAKOUT_CFG", port_name, {"brkout_mode": breakout_mode})
 
     """
     Examples:
