@@ -29,12 +29,10 @@ from dvslib import dvs_policer
 # a dynamic number of ports. GitHub Issue: Azure/sonic-swss#1384.
 NUM_PORTS = 32
 
-
 def ensure_system(cmd):
     rc, output = subprocess.getstatusoutput(cmd)
     if rc:
         raise RuntimeError(f"Failed to run command: {cmd}. rc={rc}. output: {output}")
-
 
 def pytest_addoption(parser):
     parser.addoption("--dvsname",
@@ -143,7 +141,7 @@ class ApplDbValidator(DVSDatabase):
             m = re.match(r"eth(\d+)", neighbor)
             if not m:
                 continue
-            #assert int(m.group(1)) > 0
+            assert int(m.group(1)) > 0
 
 
 class VirtualServer:
@@ -205,7 +203,6 @@ class VirtualServer:
 
     def runcmd_output(self, cmd: str) -> str:
         return subprocess.check_output(f"ip netns exec {self.nsname} {cmd}", shell=True).decode("utf-8")
-
 
 class DockerVirtualSwitch:
     APPL_DB_ID = 0
