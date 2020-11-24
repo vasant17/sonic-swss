@@ -1,11 +1,5 @@
-from swsscommon import swsscommon
-import redis
-import time
-import os
 import pytest
-from pytest import *
 import json
-import re
 from port_dpb import Port
 from port_dpb import DPB
 from dvslib.dvs_common import PollingConfig
@@ -40,8 +34,8 @@ class TestPortDPBSystem(object):
         else:
             fvs = {'vrf_name':vrf_name}
         dvs.get_config_db().create_entry(tbl_name, interface, fvs)
-        time.sleep(1)
 
+        dvs_asic_db.wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE", len(initial_entries)+1)
         current_entries = set(dvs_asic_db.get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE"))
         assert len(current_entries - initial_entries) == 1
         return list(current_entries - initial_entries)[0]
@@ -57,7 +51,6 @@ class TestPortDPBSystem(object):
             tbl_name = "INTERFACE"
 
         dvs.get_config_db().delete_entry(tbl_name, interface)
-        time.sleep(1)
 
     def add_ip_address(self, dvs, interface, ip):
         if interface.startswith("PortChannel"):
@@ -70,7 +63,6 @@ class TestPortDPBSystem(object):
             tbl_name = "INTERFACE"
 
         dvs.get_config_db().create_entry(tbl_name, interface+'|'+ip, {'NULL':'NULL'})
-        time.sleep(1)
 
     def remove_ip_address(self, dvs, interface, ip):
         if interface.startswith("PortChannel"):
@@ -83,7 +75,6 @@ class TestPortDPBSystem(object):
             tbl_name = "INTERFACE"
 
         dvs.get_config_db().delete_entry(tbl_name, interface+'|'+ip)
-        time.sleep(1)
 
     def clear_srv_config(self, dvs):
         dvs.servers[0].runcmd("ip address flush dev eth0")
@@ -100,7 +91,6 @@ class TestPortDPBSystem(object):
         else:
             tbl_name = "PORT"
         dvs_cfg_db.create_entry(tbl_name, interface, {'admin_status':status})
-        time.sleep(1)
 
     """
     Below two methods are used as polling functions, and the
