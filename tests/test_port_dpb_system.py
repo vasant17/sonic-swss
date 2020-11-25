@@ -2,9 +2,10 @@ import pytest
 import json
 from port_dpb import Port
 from port_dpb import DPB
-from dvslib.dvs_common import PollingConfig
+from dvslib.dvs_common import wait_for_result, PollingConfig
 
 ARP_FLUSH_POLLING = PollingConfig(polling_interval=0.01, timeout=10, strict=True)
+ROUTE_CHECK_POLLING = PollingConfig(polling_interval=0.01, timeout=5, strict=True)
 """
 Below prefix should be same as the one specified for Ethernet8
 in port_breakout_config_db.json in sonic-buildimage/platform/vs/docker-sonic-vs/
@@ -91,33 +92,6 @@ class TestPortDPBSystem(object):
         else:
             tbl_name = "PORT"
         dvs_cfg_db.create_entry(tbl_name, interface, {'admin_status':status})
-
-    """
-    Below two methods are used as polling functions, and the
-    prefix used in these methods should be same as from
-    port_breakout_config_db.json, which is copied to VS container
-    from sonic-buildimage/platform/vs/docker-sonic-vs/ during
-    container initialization(start.sh script)
-    """
-    def _check_route_in_asic_db(self):
-        routes = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
-        for route in routes:
-            rt = json.loads(route)
-            if rt["dest"] == Ethernet8_IP:
-                subnet_found = True
-            if rt["dest"] == Ethernet8_IPME:
-                ip2me_found = True
-
-        return ((subnet_found and ip2me_found), routes)
-
-    def _check_route_not_in_asic_db(self):
-        routes = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
-        for route in routes:
-            rt = json.loads(route)
-            if rt["dest"] == Ethernet8_IP or \
-               rt["dest"] == Ethernet8_IPME:
-                return (False, route)
-        return (True, routes)
 
     def verify_only_ports_exist(self, dvs, port_names):
         all_port_names = ["Ethernet0", "Ethernet1", "Ethernet2", "Ethernet3"]
@@ -231,7 +205,6 @@ class TestPortDPBSystem(object):
         # Verify DPB is successful
         dpb.verify_port_breakout_mode(dvs, "Ethernet0", breakoutMode1)
 
-    @pytest.mark.skip("TODO: Enable after upstreaming fix from LinkedIn repo")
     def test_port_breakout_with_acl(self, dvs, dvs_acl):
         dvs.setup_db()
         dpb = DPB()
@@ -281,7 +254,7 @@ class TestPortDPBSystem(object):
         dvs_acl.remove_acl_table("test")
         dvs_acl.verify_acl_table_count(0)
 
-    @pytest.mark.skip("TODO: Enable after upstreaming fix from LinkedIn repo")
+    @pytest.mark.skip("TODO: DEBUG when portS are in same VLAN, why operation status does not become down")
     def test_cli_command_with_force_option(self, dvs, dvs_acl):
         dvs.setup_db()
         dpb = DPB()
@@ -322,17 +295,12 @@ class TestPortDPBSystem(object):
         dvs_acl.verify_acl_table_groups(0)
         self.dvs_vlan.get_and_verify_vlan_member_ids(0)
 
-        # Add all ports to ACL table and root port to VLAN
-        # Note: If we add all ports to VLAN, we will learn MAC on
-        # one of the child ports. But when we bring down server0
-        # eth0 device to bring down Ethernet0 operationally down,
-        # only one of the child ports will go operationally down,
-        # and it may NOT be the one we learnt MAC on. So, just adding
-        # root port(Ethernet0) to VLAN
+        # Add all ports to ACL and VLAN tables
         dvs_acl.update_acl_table_port_list(aclTableName, portGroup)
-        self.dvs_vlan.create_vlan_member(vlanID, rootPortName)
+        for p in portGroup:
+            self.dvs_vlan.create_vlan_member(vlanID, p)
         dvs_acl.verify_acl_table_groups(len(portGroup))
-        self.dvs_vlan.get_and_verify_vlan_member_ids(1)
+        self.dvs_vlan.get_and_verify_vlan_member_ids(len(portGroup))
 
         # Breakout with "-f" option and ensure it succeeds and associations are removed
         dvs.change_port_breakout_mode(rootPortName, breakoutMode1x, breakoutOption)
@@ -361,14 +329,25 @@ class TestPortDPBSystem(object):
         self.create_l3_intf(dvs, "Ethernet8", "");
 
         # Configure IPv4 address on Ethernet8
-        self.add_ip_address(dvs, "Ethernet8", Ethernt8_IP)
-
+        self.add_ip_address(dvs, "Ethernet8", Ethernet8_IP)
 
         # one loopback router interface and one port based router interface
         dvs.get_asic_db().wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE", 2)
 
+        def _check_route_present():
+            routes = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
+            subnet_found = False
+            ip2me_found = False
+            for route in routes:
+                rt = json.loads(route)
+                if rt["dest"] == Ethernet8_IP:
+                    subnet_found = True
+                if rt["dest"] == Ethernet8_IPME:
+                    ip2me_found = True
+
+            return ((subnet_found and ip2me_found), routes)
         # check ASIC route database
-        status, result = wait_for_result(_check_route_in_asic_db)
+        status, result = wait_for_result(_check_route_present, ROUTE_CHECK_POLLING)
         assert status == True
 
         # Breakout Ethernet8 WITH "-f" option and ensure cleanup happened
@@ -380,15 +359,23 @@ class TestPortDPBSystem(object):
         # one loopback router interface
         dvs.get_asic_db().wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE", 1)
 
+        def _check_route_absent():
+            routes = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
+            for route in routes:
+                rt = json.loads(route)
+                if rt["dest"] == Ethernet8_IP or \
+                   rt["dest"] == Ethernet8_IPME:
+                    return (False, route)
+            return (True, routes)
         # check ASIC database
-        status, result = wait_for_result(_check_route_not_in_asic_db)
+        status, result = wait_for_result(_check_route_absent, ROUTE_CHECK_POLLING)
         assert status == True
 
         dpb.verify_port_breakout_mode(dvs, "Ethernet8", breakoutMode2x)
         dvs.change_port_breakout_mode("Ethernet8", breakoutMode1x)
         dpb.verify_port_breakout_mode(dvs, "Ethernet8", breakoutMode1x)
 
-    @pytest.mark.skip("TODO: Enable after upstreaming fix from LinkedIn repo")
+    @pytest.mark.skip("TODO: DEBUG when portS are in same VLAN, why operation status does not become down")
     def test_cli_command_with_load_port_breakout_config_option(self, dvs, dvs_acl):
         dvs.setup_db()
         dpb = DPB()
@@ -421,7 +408,7 @@ class TestPortDPBSystem(object):
         dvs.change_port_breakout_mode(rootPortName, breakoutMode4x, breakoutOption)
         dpb.verify_port_breakout_mode(dvs, rootPortName, breakoutMode4x)
         dvs_acl.verify_acl_table_groups(len(portGroup))
-        self.dvs_vlan.get_and_verify_vlan_member_ids(1)
+        self.dvs_vlan.get_and_verify_vlan_member_ids(len(portGroup))
 
         # Breakout port and expect that root port remains in VLAN and ACL tables
         dpb.verify_port_breakout_mode(dvs, rootPortName, breakoutMode4x)
@@ -439,7 +426,9 @@ class TestPortDPBSystem(object):
         dvs_acl.verify_acl_table_groups(0)
         self.dvs_vlan.get_and_verify_vlan_member_ids(0)
 
-        # Exercise port group spanned across different VLAN and ACl table
+        #--------------------------------------------------------------------
+        #  Exercise port group spanned across different VLAN and ACl table  |
+        #--------------------------------------------------------------------
         portGroup = ["Ethernet4", "Ethernet5", "Ethernet6", "Ethernet7"]
         rootPortName = portGroup[0]
         breakoutMode2x = "2x50G"
@@ -453,12 +442,11 @@ class TestPortDPBSystem(object):
         dvs.change_port_breakout_mode(rootPortName, breakoutMode4x, breakoutOption)
         dpb.verify_port_breakout_mode(dvs, rootPortName, breakoutMode4x)
         dvs_acl.verify_acl_table_groups(len(portGroup))
-        # Ethernet4 and Ethernet6 are added to VLAN100 and VLAN101 respectively.
-        self.dvs_vlan.get_and_verify_vlan_member_ids(2)
+        self.dvs_vlan.get_and_verify_vlan_member_ids(len(portGroup))
 
         # Breakout port and expect that Ethernet4 and Ethernet6 remain in
         # ACL and VLAN where as Ethernet5 and Ethernet7 get removed from
-        # ACL table
+        # ACL and VLAN table
         dpb.verify_port_breakout_mode(dvs, rootPortName, breakoutMode4x)
         dvs.change_port_breakout_mode(rootPortName, breakoutMode2x, breakoutOption + " -f")
         dpb.verify_port_breakout_mode(dvs, rootPortName, breakoutMode2x)
@@ -515,8 +503,20 @@ class TestPortDPBSystem(object):
         # one loopback router interface and one port based router interface
         dvs.get_asic_db().wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE", 2)
 
+        def _check_route_present():
+            routes = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
+            subnet_found = False
+            ip2me_found = False
+            for route in routes:
+                rt = json.loads(route)
+                if rt["dest"] == Ethernet8_IP:
+                    subnet_found = True
+                if rt["dest"] == Ethernet8_IPME:
+                    ip2me_found = True
+
+            return ((subnet_found and ip2me_found), routes)
         # check ASIC route database
-        status, result = wait_for_result(_check_route_in_asic_db)
+        status, result = wait_for_result(_check_route_present, ROUTE_CHECK_POLLING)
         assert status == True
 
         # Breakout Ethernet8 WITH "-f" option and ensure cleanup happened
@@ -528,11 +528,19 @@ class TestPortDPBSystem(object):
         # one loopback router interface
         dvs.get_asic_db().wait_for_n_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTER_INTERFACE", 1)
 
+        def _check_route_absent():
+            routes = dvs.get_asic_db().get_keys("ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY")
+            for route in routes:
+                rt = json.loads(route)
+                if rt["dest"] == Ethernet8_IP or \
+                   rt["dest"] == Ethernet8_IPME:
+                    return (False, route)
+            return (True, routes)
         # check ASIC database
-        status, result = wait_for_result(_check_route_not_in_asic_db)
+        status, result = wait_for_result(_check_route_absent, ROUTE_CHECK_POLLING)
         assert status == True
 
-    @pytest.mark.skip("TODO: Enable after upstreaming fix from LinkedIn repo")
+    @pytest.mark.skip("TODO: Debug why last breakout fails")
     def test_cli_command_negative(self, dvs, dvs_acl):
         dvs.setup_db()
         dpb = DPB()
