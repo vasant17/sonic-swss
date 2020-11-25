@@ -254,7 +254,7 @@ class TestPortDPBSystem(object):
         dvs_acl.remove_acl_table("test")
         dvs_acl.verify_acl_table_count(0)
 
-    @pytest.mark.skip("TODO: DEBUG when portS are in same VLAN, why operation status does not become down")
+    @pytest.mark.skip("DEBUG: When we have more than one child ports, operation status of all does NOT go down")
     def test_cli_command_with_force_option(self, dvs, dvs_acl):
         dvs.setup_db()
         dpb = DPB()
@@ -375,7 +375,7 @@ class TestPortDPBSystem(object):
         dvs.change_port_breakout_mode("Ethernet8", breakoutMode1x)
         dpb.verify_port_breakout_mode(dvs, "Ethernet8", breakoutMode1x)
 
-    @pytest.mark.skip("TODO: DEBUG when portS are in same VLAN, why operation status does not become down")
+    @pytest.mark.skip("DEBUG: When we have more than one child ports, operation status of all does NOT go down")
     def test_cli_command_with_load_port_breakout_config_option(self, dvs, dvs_acl):
         dvs.setup_db()
         dpb = DPB()
@@ -540,7 +540,6 @@ class TestPortDPBSystem(object):
         status, result = wait_for_result(_check_route_absent, ROUTE_CHECK_POLLING)
         assert status == True
 
-    @pytest.mark.skip("TODO: Debug why last breakout fails")
     def test_cli_command_negative(self, dvs, dvs_acl):
         dvs.setup_db()
         dpb = DPB()
@@ -600,9 +599,12 @@ class TestPortDPBSystem(object):
         dvs_acl.verify_acl_table_groups(0)
         self.dvs_vlan.get_and_verify_vlan_member_ids(0)
 
-        # Add back ACL table and ensure, breakout succeeds
+        # Create both ACL tables (as per port_breakout_config_db.json,
+        # Ethernet0 is in both ACL tables and one VLAN table)
+        # and ensure, breakout succeeds
         bind_ports = []
         dvs_acl.create_acl_table(aclTableNames[0], "L3", bind_ports)
+        dvs_acl.create_acl_table(aclTableNames[1], "L3", bind_ports)
         dpb.verify_port_breakout_mode(dvs, rootPortName, breakoutMode4x)
         dvs.change_port_breakout_mode(rootPortName, breakoutMode1x, "-l")
         dpb.verify_port_breakout_mode(dvs, rootPortName, breakoutMode1x)
@@ -610,8 +612,10 @@ class TestPortDPBSystem(object):
         self.dvs_vlan.get_and_verify_vlan_member_ids(1)
 
         # Delete ACL and VLAN tables
+        self.dvs_vlan.remove_vlan_member(vlanIDs[0], rootPortName)
         self.dvs_vlan.remove_vlan(vlanIDs[0])
         dvs_acl.remove_acl_table(aclTableNames[0])
+        dvs_acl.remove_acl_table(aclTableNames[1])
 
         # TBD: Provide "-l" option without port_breakout_config_db.json file
 
